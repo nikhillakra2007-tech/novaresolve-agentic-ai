@@ -6,7 +6,7 @@ def test_root_endpoint(client: TestClient):
     response = client.get("/")
     assert response.status_code == 200
     data = response.json()
-    assert data["service"] == "NovaCart API"
+    assert data["service"] == "NovaResolve API"
     assert data["status"] == "running"
 
 
@@ -14,7 +14,7 @@ def test_health_endpoint_connected(client: TestClient):
     response = client.get("/api/health")
     assert response.status_code == 200
     data = response.json()
-    assert data["service"] == "NovaCart API"
+    assert data["service"] == "NovaResolve API"
     assert data["status"] == "healthy"
     assert data["environment"] == "development"
     assert "database" in data

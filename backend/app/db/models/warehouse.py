@@ -1,14 +1,14 @@
 from typing import List, TYPE_CHECKING
 from sqlalchemy import String, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from backend.app.db.base import Base, UUIDPrimaryKeyMixin
+from backend.app.db.base import Base, UUIDPrimaryKeyMixin, TimestampMixin
 
 if TYPE_CHECKING:
     from backend.app.db.models.inventory import Inventory
     from backend.app.db.models.replacement import Replacement
 
 
-class Warehouse(Base, UUIDPrimaryKeyMixin):
+class Warehouse(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "warehouses"
     __table_args__ = (
         CheckConstraint("status IN ('active', 'inactive', 'maintenance')", name="chk_warehouse_status"),

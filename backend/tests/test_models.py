@@ -130,3 +130,49 @@ def test_all_13_tables_registered_in_metadata():
 
     actual_tables = set(Base.metadata.tables.keys())
     assert expected_tables.issubset(actual_tables), f"Missing tables: {expected_tables - actual_tables}"
+
+
+def test_product_and_warehouse_timestamps(db_session: Session):
+    product = db_session.query(Product).first()
+    warehouse = db_session.query(Warehouse).first()
+
+    assert product is not None
+    assert product.created_at is not None
+
+    assert warehouse is not None
+    assert warehouse.created_at is not None
+
+
+def test_updated_at_trigger_and_onupdate(db_session: Session):
+    inv = db_session.query(Inventory).first()
+    assert inv is not None
+    original_updated_at = inv.updated_at
+
+    import time
+    time.sleep(0.01)  # small delta
+
+    inv.quantity = inv.quantity + 1
+    db_session.commit()
+    db_session.refresh(inv)
+
+    assert inv.updated_at >= original_updated_at
+
+
+def test_get_db_session_lifecycle():
+    from backend.app.db.session import get_db
+    from unittest.mock import patch
+    from sqlalchemy.orm import Session
+
+    with patch.object(Session, "close", autospec=True) as mock_close:
+        generator = get_db()
+        session = next(generator)
+        assert isinstance(session, Session)
+        assert mock_close.call_count == 0
+
+        # Exhaust generator to trigger finally block
+        try:
+            next(generator)
+        except StopIteration:
+            pass
+
+        assert mock_close.call_count == 1

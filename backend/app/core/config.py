@@ -3,7 +3,7 @@ from typing import Optional
 
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "NovaCart"
+    PROJECT_NAME: str = "NovaResolve"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
     API_V1_STR: str = "/api"

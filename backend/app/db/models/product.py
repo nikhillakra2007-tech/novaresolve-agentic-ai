@@ -2,7 +2,7 @@ from typing import List, TYPE_CHECKING
 from decimal import Decimal
 from sqlalchemy import String, Numeric, Boolean, CheckConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from backend.app.db.base import Base, UUIDPrimaryKeyMixin
+from backend.app.db.base import Base, UUIDPrimaryKeyMixin, TimestampMixin
 
 if TYPE_CHECKING:
     from backend.app.db.models.order import OrderItem
@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from backend.app.db.models.replacement import Replacement
 
 
-class Product(Base, UUIDPrimaryKeyMixin):
+class Product(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "products"
     __table_args__ = (
         CheckConstraint("price >= 0", name="chk_product_price_non_negative"),

@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS products (
     name VARCHAR(200) NOT NULL,
     category VARCHAR(100) NOT NULL,
     price NUMERIC(12, 2) NOT NULL CHECK (price >= 0),
-    active BOOLEAN NOT NULL DEFAULT TRUE
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- 3. Warehouses
@@ -29,7 +30,8 @@ CREATE TABLE IF NOT EXISTS warehouses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(120) UNIQUE NOT NULL,
     location VARCHAR(150) NOT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'maintenance'))
+    status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'maintenance')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- 4. Inventory
@@ -202,3 +204,30 @@ CREATE INDEX IF NOT EXISTS idx_cancellations_order_id ON cancellations(order_id)
 CREATE INDEX IF NOT EXISTS idx_cancellations_case_id ON cancellations(case_id);
 CREATE INDEX IF NOT EXISTS idx_agent_events_case_id ON agent_events(case_id);
 CREATE INDEX IF NOT EXISTS idx_agent_events_event_type ON agent_events(event_type);
+
+-- Updated_at triggers for automatic database-level timestamp updating
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_inventory_updated_at ON inventory;
+CREATE TRIGGER trg_inventory_updated_at
+    BEFORE UPDATE ON inventory
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS trg_policies_updated_at ON policies;
+CREATE TRIGGER trg_policies_updated_at
+    BEFORE UPDATE ON policies
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS trg_cases_updated_at ON cases;
+CREATE TRIGGER trg_cases_updated_at
+    BEFORE UPDATE ON cases
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
