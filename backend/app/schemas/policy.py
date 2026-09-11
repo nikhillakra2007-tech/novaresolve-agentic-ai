@@ -13,6 +13,7 @@ class PolicyEvaluationRequest(BaseModel):
     days_since_order: Optional[int] = Field(None, ge=0, description="Order age in days")
     has_shipment: Optional[bool] = Field(None, description="Whether order has a shipment record")
     shipment_status: Optional[str] = Field(None, description="Current shipment status")
+    reason: Optional[str] = Field(None, description="Customer stated reason for refund, replacement, or cancellation")
     context: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional arbitrary rule parameters")
 
 

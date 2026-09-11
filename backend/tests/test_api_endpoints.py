@@ -96,10 +96,12 @@ def test_api_inventory_endpoints(client: TestClient, db_session: Session):
 
 
 def test_api_policy_evaluate(client: TestClient):
+    # Allowed refund policy test
     payload = {
         "action_type": "refund",
         "amount": 25.50,
         "order_status": "delivered",
+        "reason": "defective item",
     }
     res = client.post("/api/policies/evaluate", json=payload)
     assert res.status_code == 200
@@ -107,9 +109,27 @@ def test_api_policy_evaluate(client: TestClient):
     assert data["allowed"] is True
     assert data["requires_approval"] is False
 
+    # Disallowed refund reason test
+    payload_disallowed = {
+        "action_type": "refund",
+        "amount": 25.50,
+        "order_status": "delivered",
+        "reason": "changed my mind",
+    }
+    res_disallowed = client.post("/api/policies/evaluate", json=payload_disallowed)
+    assert res_disallowed.status_code == 200
+    assert res_disallowed.json()["allowed"] is False
+
 
 def test_api_resolutions_refund(client: TestClient, db_session: Session):
-    customer = db_session.query(Customer).filter(Customer.email == "scenario3_charlie@example.com").first()
+    customer = Customer(
+        name="API Refund Charlie",
+        email=f"api_refund_{uuid.uuid4().hex[:6]}@example.com",
+        status="active",
+    )
+    db_session.add(customer)
+    db_session.flush()
+
     order = Order(
         customer_id=customer.id,
         total_amount=Decimal("150.00"),
@@ -120,11 +140,11 @@ def test_api_resolutions_refund(client: TestClient, db_session: Session):
     db_session.commit()
     db_session.refresh(order)
 
-    # 1. Successful refund creation
+    # 1. Successful refund creation with allowed reason
     payload = {
         "order_id": str(order.id),
         "amount": 40.00,
-        "reason": "Customer dissatisfied with color",
+        "reason": "Defective item upon arrival",
     }
     res = client.post("/api/refunds", json=payload)
     assert res.status_code == 201
@@ -136,21 +156,39 @@ def test_api_resolutions_refund(client: TestClient, db_session: Session):
     payload_excess = {
         "order_id": str(order.id),
         "amount": 200.00,
-        "reason": "Excess claim",
+        "reason": "Defective claim",
     }
     res_excess = client.post("/api/refunds", json=payload_excess)
     assert res_excess.status_code == 400
     assert res_excess.json()["error"] == "BusinessRuleViolationError"
 
+    # 3. Disallowed refund reason -> 409 Conflict (PolicyDenialError)
+    payload_disallowed = {
+        "order_id": str(order.id),
+        "amount": 20.00,
+        "reason": "Found it cheaper at another store",
+    }
+    res_disallowed = client.post("/api/refunds", json=payload_disallowed)
+    assert res_disallowed.status_code == 409
+    assert res_disallowed.json()["error"] == "PolicyDenialError"
+
 
 def test_api_resolutions_replacement_and_cancellation(client: TestClient, db_session: Session):
-    customer = db_session.query(Customer).filter(Customer.email == "scenario2_bob@example.com").first()
+    customer = Customer(
+        name="API Replacement Bob",
+        email=f"api_rep_{uuid.uuid4().hex[:6]}@example.com",
+        status="active",
+    )
+    db_session.add(customer)
+    db_session.flush()
+
     product = db_session.query(Product).filter(Product.sku == "ELEC-4K-MONITOR-02").first()
     dallas = db_session.query(Warehouse).filter(Warehouse.name == "Dallas Central Warehouse").first()
+    reno = db_session.query(Warehouse).filter(Warehouse.name == "Reno West Warehouse").first()
 
     order = Order(
         customer_id=customer.id,
-        total_amount=Decimal("399.99"),
+        total_amount=Decimal("799.98"),
         status="delivered",
         shipping_address="Bob API Replacement Address",
     )
@@ -160,25 +198,37 @@ def test_api_resolutions_replacement_and_cancellation(client: TestClient, db_ses
     item = OrderItem(
         order_id=order.id,
         product_id=product.id,
-        quantity=1,
+        quantity=3,
         unit_price=Decimal("399.99"),
     )
     db_session.add(item)
     db_session.commit()
 
-    # Attempting replacement from Dallas (0 stock) -> 409 Conflict
-    rep_payload = {
+    # 1. Attempting replacement from Dallas (0 stock) -> 409 Conflict
+    rep_payload_fail = {
         "order_id": str(order.id),
         "product_id": str(product.id),
         "warehouse_id": str(dallas.id),
         "quantity": 1,
         "reason": "Broken screen",
     }
-    res_rep = client.post("/api/replacements", json=rep_payload)
-    assert res_rep.status_code == 409
-    assert res_rep.json()["error"] == "InsufficientInventoryError"
+    res_rep_fail = client.post("/api/replacements", json=rep_payload_fail)
+    assert res_rep_fail.status_code == 409
+    assert res_rep_fail.json()["error"] == "InsufficientInventoryError"
 
-    # Cancellation test on shipped order -> 409 Conflict
+    # 2. Successful replacement from Reno with quantity=2
+    rep_payload_success = {
+        "order_id": str(order.id),
+        "product_id": str(product.id),
+        "warehouse_id": str(reno.id),
+        "quantity": 2,
+        "reason": "Defective panel replacement",
+    }
+    res_rep_success = client.post("/api/replacements", json=rep_payload_success)
+    assert res_rep_success.status_code == 201
+    assert res_rep_success.json()["quantity"] == 2
+
+    # 3. Cancellation test on shipped order -> 409 Conflict
     scenario8_order = db_session.query(Order).join(Customer).filter(
         Customer.email == "scenario8_hannah@example.com"
     ).first()

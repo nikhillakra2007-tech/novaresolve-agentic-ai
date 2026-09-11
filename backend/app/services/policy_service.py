@@ -23,6 +23,7 @@ class PolicyService:
         days_since_order: Optional[int] = None,
         has_shipment: Optional[bool] = None,
         shipment_status: Optional[str] = None,
+        reason: Optional[str] = None,
         context: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> PolicyEvaluationResponse:
@@ -37,6 +38,7 @@ class PolicyService:
                 eff_days = request.get("days_since_order") if request.get("days_since_order") is not None else days_since_order
                 eff_has_shipment = request.get("has_shipment") if request.get("has_shipment") is not None else has_shipment
                 eff_shipment_status = request.get("shipment_status") or shipment_status
+                eff_reason = request.get("reason") if request.get("reason") is not None else reason
                 eff_context = request.get("context") or context or {}
             else:
                 eff_issue_type = request.issue_type or request.action_type or issue_type
@@ -46,6 +48,7 @@ class PolicyService:
                 eff_days = request.days_since_order if request.days_since_order is not None else days_since_order
                 eff_has_shipment = request.has_shipment if request.has_shipment is not None else has_shipment
                 eff_shipment_status = request.shipment_status or shipment_status
+                eff_reason = getattr(request, "reason", None) or reason
                 eff_context = request.context or context or {}
         else:
             eff_issue_type = issue_type or kwargs.get("action_type")
@@ -55,6 +58,7 @@ class PolicyService:
             eff_days = days_since_order
             eff_has_shipment = has_shipment
             eff_shipment_status = shipment_status
+            eff_reason = reason or kwargs.get("reason")
             eff_context = context or {}
 
         if not eff_issue_type:
@@ -131,6 +135,23 @@ class PolicyService:
                 if eff_order_status in disallowed:
                     match = False
                     rejection_reasons.append(f"Order status '{eff_order_status}' is explicitly disallowed by policy")
+
+            # 8. Allowed reasons condition
+            if "allowed_reasons" in conds:
+                allowed_reasons = [str(r).strip().lower() for r in conds["allowed_reasons"]]
+                if not eff_reason:
+                    match = False
+                    rejection_reasons.append(f"Policy requires an eligible reason from: {allowed_reasons}")
+                else:
+                    norm_reason = str(eff_reason).strip().lower()
+                    reason_matched = any(
+                        ar == norm_reason or ar in norm_reason for ar in allowed_reasons
+                    )
+                    if not reason_matched:
+                        match = False
+                        rejection_reasons.append(
+                            f"Reason '{eff_reason}' does not match allowed reasons: {allowed_reasons}"
+                        )
 
             if match:
                 requires_appr = (

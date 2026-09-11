@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy.orm import Session
 
@@ -11,10 +12,12 @@ from backend.app.db.models.inventory import Inventory
 from backend.app.db.models.replacement import Replacement
 from backend.app.schemas.resolution import ReplacementCreateRequest
 from backend.app.services.customer_service import CustomerService
+from backend.app.services.policy_service import PolicyService
 from backend.app.core.exceptions import (
     ResourceNotFoundError,
     BusinessRuleViolationError,
     InsufficientInventoryError,
+    PolicyDenialError,
 )
 
 
@@ -31,7 +34,7 @@ class ReplacementService:
         reason: Optional[str] = None,
         **kwargs,
     ) -> Replacement:
-        """Executes a replacement transaction with atomic inventory reservation and constraint checking."""
+        """Executes a replacement transaction with policy enforcement, atomic inventory reservation, and quantity persistence."""
         if request is not None:
             eff_order_id = request.order_id
             eff_product_id = request.product_id
@@ -53,41 +56,31 @@ class ReplacementService:
         if eff_quantity <= 0:
             raise BusinessRuleViolationError("Replacement quantity must be greater than zero.")
 
+        # 1. Validate order existence
         order = db.query(Order).filter(Order.id == eff_order_id).first()
         if not order:
             raise ResourceNotFoundError(f"Order with ID '{eff_order_id}' was not found.")
 
+        # 2. Validate customer active status
         customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
         if customer:
             CustomerService.validate_active_requester(customer)
 
+        # 3. Validate explicit case_id if provided
         if eff_case_id:
-            case = db.query(Case).filter(Case.id == eff_case_id).first()
-            if not case:
+            existing_case = db.query(Case).filter(Case.id == eff_case_id).first()
+            if not existing_case:
                 raise ResourceNotFoundError(f"Case with ID '{eff_case_id}' was not found.")
-            if case.order_id and case.order_id != eff_order_id:
+            if existing_case.order_id and existing_case.order_id != eff_order_id:
                 raise BusinessRuleViolationError(
-                    f"Case '{eff_case_id}' is associated with order '{case.order_id}', not '{eff_order_id}'."
+                    f"Case '{eff_case_id}' is associated with order '{existing_case.order_id}', not '{eff_order_id}'."
                 )
-        else:
-            case = db.query(Case).filter(Case.order_id == eff_order_id).first()
-            if not case:
-                case = Case(
-                    customer_id=order.customer_id,
-                    order_id=order.id,
-                    issue_type="replacement",
-                    customer_goal=f"Replacement request for order {order.id}",
-                    status="investigating",
-                    risk_level="low",
-                )
-                db.add(case)
-                db.flush()
 
+        # 4. Product must belong to original order items
         product = db.query(Product).filter(Product.id == eff_product_id).first()
         if not product:
             raise ResourceNotFoundError(f"Product with ID '{eff_product_id}' was not found.")
 
-        # Product must belong to order items
         order_item = (
             db.query(OrderItem)
             .filter(
@@ -102,6 +95,7 @@ class ReplacementService:
                 details={"order_id": str(eff_order_id), "product_id": str(eff_product_id)},
             )
 
+        # 5. Warehouse must exist and be active
         warehouse = db.query(Warehouse).filter(Warehouse.id == eff_warehouse_id).first()
         if not warehouse:
             raise ResourceNotFoundError(f"Warehouse with ID '{eff_warehouse_id}' was not found.")
@@ -112,7 +106,30 @@ class ReplacementService:
                 details={"warehouse_id": str(eff_warehouse_id), "status": warehouse.status},
             )
 
-        # Inventory check with FOR UPDATE lock for concurrency safety
+        # 6. ENFORCE POLICY: evaluate replacement policy before mutating inventory
+        days_since_order = None
+        if order.order_date:
+            days_since_order = (datetime.now(timezone.utc) - order.order_date).days
+
+        policy_decision = PolicyService.evaluate_policy(
+            db=db,
+            issue_type="replacement",
+            action="create_replacement_order",
+            order_status=order.status,
+            days_since_order=days_since_order,
+            reason=eff_reason,
+        )
+        if not policy_decision.allowed:
+            raise PolicyDenialError(
+                f"Replacement disallowed by policy: {policy_decision.reason}",
+                details={
+                    "action": policy_decision.action,
+                    "reason": policy_decision.reason,
+                    "applicable_conditions": policy_decision.applicable_conditions,
+                },
+            )
+
+        # 7. Inventory check with FOR UPDATE lock for concurrency safety
         inventory = (
             db.query(Inventory)
             .filter(
@@ -139,24 +156,48 @@ class ReplacementService:
                 },
             )
 
-        # Reserve inventory atomically
-        inventory.reserved_quantity += eff_quantity
+        # 8. All validations, policy checks, and inventory checks passed.
+        # Execute state-changing transaction (Case creation deferred to here).
+        try:
+            if eff_case_id:
+                case = db.query(Case).filter(Case.id == eff_case_id).first()
+            else:
+                case = db.query(Case).filter(Case.order_id == eff_order_id).first()
+                if not case:
+                    case = Case(
+                        customer_id=order.customer_id,
+                        order_id=order.id,
+                        issue_type="replacement",
+                        customer_goal=f"Replacement request for order {order.id}",
+                        status="investigating",
+                        risk_level="low",
+                    )
+                    db.add(case)
+                    db.flush()
 
-        replacement = Replacement(
-            case_id=case.id,
-            order_id=order.id,
-            product_id=product.id,
-            warehouse_id=warehouse.id,
-            reason=eff_reason,
-            status="processing",
-            requires_approval=False,
-        )
-        db.add(replacement)
+            # Reserve inventory atomically
+            inventory.reserved_quantity += eff_quantity
 
-        order.status = "replacement_pending"
-        case.resolution_type = "replacement"
-        case.resolution_status = "processing"
+            replacement = Replacement(
+                case_id=case.id,
+                order_id=order.id,
+                product_id=product.id,
+                warehouse_id=warehouse.id,
+                quantity=eff_quantity,
+                reason=eff_reason,
+                status="processing",
+                requires_approval=False,
+            )
+            db.add(replacement)
 
-        db.commit()
-        db.refresh(replacement)
-        return replacement
+            order.status = "replacement_pending"
+            case.resolution_type = "replacement"
+            case.resolution_status = "processing"
+
+            db.commit()
+            db.refresh(replacement)
+            return replacement
+
+        except Exception:
+            db.rollback()
+            raise
