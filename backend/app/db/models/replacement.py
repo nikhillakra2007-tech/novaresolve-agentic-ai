@@ -54,3 +54,8 @@ class Replacement(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     case: Mapped["Case"] = relationship("Case", back_populates="replacements")
     product: Mapped["Product"] = relationship("Product", back_populates="replacements")
     warehouse: Mapped["Warehouse"] = relationship("Warehouse", back_populates="replacements")
+
+    @property
+    def quantity(self) -> int:
+        return 1
+

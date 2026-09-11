@@ -35,3 +35,8 @@ class Shipment(Base, UUIDPrimaryKeyMixin):
 
     # Relationships
     order: Mapped["Order"] = relationship("Order", back_populates="shipments")
+
+    @property
+    def is_delayed(self) -> bool:
+        """Dynamically computes whether the shipment is delayed."""
+        return self.status == "delayed"

@@ -101,3 +101,16 @@ class OrderItem(Base, UUIDPrimaryKeyMixin):
     # Relationships
     order: Mapped["Order"] = relationship("Order", back_populates="items")
     product: Mapped["Product"] = relationship("Product", back_populates="order_items")
+
+    @property
+    def total_item_price(self) -> Decimal:
+        return Decimal(self.quantity) * self.unit_price
+
+    @property
+    def product_name(self) -> Optional[str]:
+        return self.product.name if self.product else None
+
+    @property
+    def product_sku(self) -> Optional[str]:
+        return self.product.sku if self.product else None
+
