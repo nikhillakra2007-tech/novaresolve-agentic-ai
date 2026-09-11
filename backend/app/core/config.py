@@ -1,0 +1,30 @@
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Optional
+
+
+class Settings(BaseSettings):
+    PROJECT_NAME: str = "NovaCart"
+    ENVIRONMENT: str = "development"
+    DEBUG: bool = True
+    API_V1_STR: str = "/api"
+    PORT: int = 8000
+    HOST: str = "127.0.0.1"
+
+    # PostgreSQL Database URL
+    DATABASE_URL: str = "postgresql+psycopg://postgres:postgres@localhost:5432/novacart"
+
+    # Pool Configuration
+    DB_POOL_SIZE: int = 10
+    DB_MAX_OVERFLOW: int = 20
+    DB_POOL_TIMEOUT: int = 30
+    DB_POOL_RECYCLE: int = 1800
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+    )
+
+
+settings = Settings()
