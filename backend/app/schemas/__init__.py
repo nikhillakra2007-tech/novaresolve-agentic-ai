@@ -19,6 +19,13 @@ from backend.app.schemas.resolution import (
     CancellationCreateRequest,
     CancellationResponse,
 )
+from backend.app.schemas.case import (
+    CaseResponse,
+    CaseStateUpdateRequest,
+    AgentEventCreateRequest,
+    AgentEventResponse,
+    VerificationResponse,
+)
 
 __all__ = [
     "HealthResponse",
@@ -38,4 +45,9 @@ __all__ = [
     "ReplacementResponse",
     "CancellationCreateRequest",
     "CancellationResponse",
+    "CaseResponse",
+    "CaseStateUpdateRequest",
+    "AgentEventCreateRequest",
+    "AgentEventResponse",
+    "VerificationResponse",
 ]

@@ -8,25 +8,30 @@ The system is designed to investigate customer issues, inspect enterprise data, 
 
 ## Current Architecture & Scope
 
-This repository contains **Phase 1 (Database & Backend Foundation)** and **Phase 2 (Domain Services & REST API Layer)**:
+This repository contains **Phase 1 (Database & Backend Foundation)**, **Phase 2 (Domain Services & REST API Layer)**, and **Phase 3 (Agent Tools & Capability Layer)**:
 - **Application Framework**: Python 3.12, FastAPI (modular routing under `/api`)
 - **Database**: PostgreSQL 18.x directly (UUID PKs, check constraints, foreign keys, performance indexes)
 - **ORM & Sessions**: SQLAlchemy 2.x declarative models and scoped session dependency
-- **Database Migrations**: Alembic (`0001_initial_schema`)
+- **Database Migrations**: Alembic (`0001_initial_schema`, `0002_add_replacement_quantity`)
 - **Domain Services**:
   1. `CustomerService`: ID/email lookups, active requester validations
   2. `OrderService`: Order item retrieval, customer ownership validations
   3. `ShipmentService`: Carrier tracking events, dynamic `is_delayed` calculation
   4. `InventoryService`: Warehouse stock checks (observable zero-stock), alternative active warehouse discovery
-  5. `PolicyService`: Priority rule evaluator, threshold checks, approval detection
-  6. `RefundService`: Transactional refund execution, balance validation, $100 supervisor threshold
-  7. `ReplacementService`: Pessimistic locking (`with_for_update`), atomic stock reservation
+  5. `PolicyService`: Priority rule evaluator, threshold checks, approval detection, `allowed_reasons` enforcement
+  6. `RefundService`: Transactional refund execution, balance validation, pessimistic row lock, $100 supervisor threshold
+  7. `ReplacementService`: Pessimistic locking (`with_for_update`), quantity persistence, atomic stock reservation
   8. `CancellationService`: Fulfillment state inspection, shipment conflict enforcement
-- **Custom Exception Handlers**: Clear HTTP status code mapping (400, 403, 404, 409) with uniform JSON error payloads
+  9. `CaseService`: Safe case lifecycle updates, plan tracking, sanitized agent audit event logging
+  10. `VerificationService`: Independent post-resolution state verification across resolutions, orders, and inventory
+- **Agent Tool Layer (`agents/tools/`)**:
+  - 13 typed, deterministic capabilities organized into Observation, Decision, Action, and Case Support categories.
+  - Standardized `ToolResult` envelope with preserved domain error statuses.
+  - Central `TOOL_REGISTRY` with strict safety boundaries (blocks raw SQL, eval, and arbitrary execution).
 - **Synthetic Domain Data**: Deterministic seeding of 60 customers, 26 products, 4 warehouses, 220 orders, shipments, policies, and **10 explicit agentic scenarios**.
 
 > [!NOTE]
-> **Phase Boundaries**: The Agent Runtime (LLM loop, planning, tools) and the Next.js Frontend are intentionally separate future phases. This domain and API layer provides the robust, transactional capabilities required for future agent tools.
+> **Phase Boundaries**: The Agent Runtime (LLM loop, planning, ReAct agents) and the Next.js Frontend are intentionally separate future phases (Phase 4 and Phase 5). Phase 3 establishes the controlled capability interface that the future agent will invoke.
 
 ---
 
@@ -98,25 +103,43 @@ novaresolve-agentic-ai/
 │   │       ├── policy_service.py
 │   │       ├── refund_service.py
 │   │       ├── replacement_service.py
-│   │       └── cancellation_service.py
-│   └── tests/                     # Automated Pytest test suite (40 passing tests)
+│   │       ├── cancellation_service.py
+│   │       ├── case_service.py
+│   │       └── verification_service.py
+│   └── tests/                     # Automated Pytest test suite (88 passing tests)
 │       ├── conftest.py
 │       ├── test_health.py
 │       ├── test_models.py
 │       ├── test_seed_scenarios.py
 │       ├── test_services_read.py
 │       ├── test_services_resolution.py
-│       └── test_api_endpoints.py
+│       ├── test_api_endpoints.py
+│       └── test_agent_tools.py
 ├── db/
 │   ├── migrations/
 │   │   ├── 001_initial_schema.sql
+│   │   ├── 002_add_replacement_quantity.sql
 │   │   ├── env.py
 │   │   └── versions/
-│   │       └── 0001_initial_schema.py
+│   │       ├── 0001_initial_schema.py
+│   │       └── 0002_add_replacement_quantity.py
 │   └── seed/
 │       ├── scenarios.py           # Definitions for 10 deliberate agentic scenarios
 │       └── seed_data.py           # Deterministic database seeding script
-├── agents/                        # Future agent runtime & planner modules
+├── agents/                        # Agent capability layer (Phase 3)
+│   ├── __init__.py
+│   ├── README.md
+│   └── tools/
+│       ├── __init__.py
+│       ├── base.py                # BaseTool, ToolResult, ToolContext, ToolResultStatus
+│       ├── customer_tools.py      # get_customer
+│       ├── order_tools.py         # get_order
+│       ├── shipment_tools.py      # get_shipment
+│       ├── inventory_tools.py     # check_inventory, search_alternative_inventory
+│       ├── policy_tools.py        # evaluate_policy
+│       ├── resolution_tools.py    # create_refund, create_replacement, cancel_order
+│       ├── case_tools.py          # get_case_state, persist_case_state, log_agent_event, verify_resolution
+│       └── registry.py            # TOOL_REGISTRY & execution boundary
 ├── frontend/                      # Future Next.js resolution dashboard (scroll-craft)
 ├── alembic.ini                    # Alembic configuration
 ├── requirements.txt               # Root dependency entrypoint
