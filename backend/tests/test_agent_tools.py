@@ -16,6 +16,8 @@ from backend.app.db.models.agent_event import AgentEvent
 from backend.app.db.models.refund import Refund
 from backend.app.db.models.replacement import Replacement
 from backend.app.db.models.cancellation import Cancellation
+from backend.app.services.case_service import CaseService
+from unittest import mock
 
 from agents.tools import (
     TOOL_REGISTRY,
@@ -844,6 +846,95 @@ def test_verify_resolution_refund_success(db_session: Session):
     assert res.data["resolution_type"] == "refund"
 
 
+def test_verify_resolution_refund_pending_approval(db_session: Session):
+    customer = make_test_customer(db_session)
+    order = Order(
+        customer_id=customer.id,
+        status="delivered",
+        total_amount=Decimal("150.00"),
+        shipping_address="Approval St",
+        order_date=datetime.now(timezone.utc) - timedelta(days=2),
+    )
+    db_session.add(order)
+    db_session.flush()
+
+    case = Case(
+        customer_id=customer.id,
+        order_id=order.id,
+        issue_type="refund",
+        customer_goal="High value refund",
+        status="awaiting_approval",
+        risk_level="high",
+        resolution_type="refund",
+        resolution_status="awaiting_approval",
+        requires_approval=True,
+    )
+    db_session.add(case)
+    db_session.flush()
+
+    refund = Refund(
+        case_id=case.id,
+        order_id=order.id,
+        amount=Decimal("150.00"),
+        reason="damaged item",
+        status="pending",
+        requires_approval=True,
+    )
+    db_session.add(refund)
+    db_session.commit()
+
+    ctx = ToolContext(db=db_session)
+    res = verify_resolution.execute(ctx, case_id=case.id)
+    # Verification MUST be False for pending approval
+    assert res.success is False
+    assert res.data["verified"] is False
+    assert res.status == ToolResultStatus.APPROVAL_REQUIRED
+    assert "awaiting approval" in res.message.lower() or "pending approval" in res.message.lower()
+    assert res.data["observed_state"]["is_pending_approval"] is True
+
+
+def test_verify_resolution_refund_rejected_or_failed(db_session: Session):
+    customer = make_test_customer(db_session)
+    order = Order(
+        customer_id=customer.id,
+        status="delivered",
+        total_amount=Decimal("50.00"),
+        shipping_address="Rejected St",
+        order_date=datetime.now(timezone.utc) - timedelta(days=2),
+    )
+    db_session.add(order)
+    db_session.flush()
+
+    case = Case(
+        customer_id=customer.id,
+        order_id=order.id,
+        issue_type="refund",
+        customer_goal="Refund order",
+        status="failed",
+        resolution_type="refund",
+    )
+    db_session.add(case)
+    db_session.flush()
+
+    refund = Refund(
+        case_id=case.id,
+        order_id=order.id,
+        amount=Decimal("50.00"),
+        reason="buyer remorse",
+        status="rejected",
+        requires_approval=False,
+    )
+    db_session.add(refund)
+    db_session.commit()
+
+    ctx = ToolContext(db=db_session)
+    res = verify_resolution.execute(ctx, case_id=case.id)
+    assert res.success is False
+    assert res.data["verified"] is False
+    assert res.status == ToolResultStatus.BLOCKED
+    assert "rejected" in res.message.lower()
+
+
 def test_verify_resolution_replacement_success(db_session: Session):
     customer = make_test_customer(db_session)
     product = Product(
@@ -980,3 +1071,144 @@ def test_domain_errors_distinguishable():
     assert ToolResultStatus.POLICY_DENIED != ToolResultStatus.INSUFFICIENT_INVENTORY
     assert ToolResultStatus.CONFLICT != ToolResultStatus.NOT_FOUND
     assert ToolResultStatus.CUSTOMER_BLOCKED != ToolResultStatus.INVALID
+
+
+# ============================================================
+# 13. AUDIT FAILURE HANDLING TESTS (NOT SILENTLY SWALLOWED)
+# ============================================================
+
+def test_create_refund_audit_logging_failure_not_swallowed(db_session: Session, caplog: pytest.LogCaptureFixture):
+    customer = make_test_customer(db_session)
+    order = Order(
+        customer_id=customer.id,
+        status="delivered",
+        total_amount=Decimal("60.00"),
+        shipping_address="Audit Test St",
+        order_date=datetime.now(timezone.utc) - timedelta(days=2),
+    )
+    db_session.add(order)
+    db_session.commit()
+
+    shipment = Shipment(
+        order_id=order.id,
+        tracking_number=f"TRK_{uuid.uuid4().hex[:8]}",
+        carrier="FedEx",
+        status="delivered",
+        actual_delivery=datetime.now(timezone.utc) - timedelta(days=1),
+    )
+    db_session.add(shipment)
+    db_session.commit()
+
+    ctx = ToolContext(db=db_session)
+
+    with mock.patch.object(CaseService, "log_agent_event", side_effect=RuntimeError("Secret DB audit write failure")):
+        res = create_refund.execute(
+            ctx,
+            order_id=order.id,
+            amount=Decimal("25.00"),
+            reason="defective item upon arrival",
+        )
+
+    # 1. Business action STILL succeeds
+    assert res.success is True
+    assert res.data["status"] == "completed"
+
+    # 2. Audit failure is surfaced in data metadata
+    assert res.data["audit_event_logged"] is False
+    assert res.data.get("audit_warning") == "Failed to record audit event in database."
+
+    # 3. Error is logged (not silently swallowed)
+    assert any("Audit event logging failed" in rec.message for rec in caplog.records)
+
+    # 4. Sensitive internal error message NOT leaked into ToolResult
+    assert "Secret DB audit write failure" not in str(res.data)
+    assert "Secret DB audit write failure" not in res.message
+
+    # 5. Refund record actually persisted in DB
+    persisted_refund = db_session.query(Refund).filter(Refund.order_id == order.id).first()
+    assert persisted_refund is not None
+    assert persisted_refund.amount == Decimal("25.00")
+
+
+def test_create_replacement_audit_logging_failure_not_swallowed(db_session: Session, caplog: pytest.LogCaptureFixture):
+    customer = make_test_customer(db_session)
+    warehouse = db_session.query(Warehouse).filter(Warehouse.status == "active").first()
+
+    test_prod = Product(
+        name="Audit Replacement Item",
+        sku=f"AUDIT-REP-{uuid.uuid4().hex[:6]}",
+        price=Decimal("30.00"),
+        category="Testing",
+    )
+    db_session.add(test_prod)
+    db_session.flush()
+
+    inv = Inventory(
+        product_id=test_prod.id,
+        warehouse_id=warehouse.id,
+        quantity=20,
+        reserved_quantity=0,
+    )
+    db_session.add(inv)
+    db_session.flush()
+
+    order = Order(
+        customer_id=customer.id,
+        status="processing",
+        total_amount=Decimal("60.00"),
+        shipping_address="Audit Replacement Way",
+        order_date=datetime.now(timezone.utc) - timedelta(days=2),
+    )
+    db_session.add(order)
+    db_session.flush()
+
+    item = OrderItem(
+        order_id=order.id,
+        product_id=test_prod.id,
+        quantity=1,
+        unit_price=Decimal("30.00"),
+    )
+    db_session.add(item)
+    db_session.commit()
+
+    ctx = ToolContext(db=db_session)
+
+    with mock.patch.object(CaseService, "log_agent_event", side_effect=RuntimeError("Audit event disk failure")):
+        res = create_replacement.execute(
+            ctx,
+            order_id=order.id,
+            product_id=test_prod.id,
+            warehouse_id=warehouse.id,
+            quantity=1,
+            reason="defective replacement needed",
+        )
+
+    assert res.success is True
+    assert res.data["audit_event_logged"] is False
+    assert res.data.get("audit_warning") == "Failed to record audit event in database."
+    assert any("Audit event logging failed" in rec.message for rec in caplog.records)
+    assert "Audit event disk failure" not in str(res.data)
+
+
+def test_cancel_order_audit_logging_failure_not_swallowed(db_session: Session, caplog: pytest.LogCaptureFixture):
+    customer = make_test_customer(db_session)
+    order = Order(
+        customer_id=customer.id,
+        status="placed",
+        total_amount=Decimal("40.00"),
+        shipping_address="Audit Cancel St",
+    )
+    db_session.add(order)
+    db_session.commit()
+
+    ctx = ToolContext(db=db_session)
+
+    with mock.patch.object(CaseService, "log_agent_event", side_effect=RuntimeError("Event logger error")):
+        res = cancel_order.execute(ctx, order_id=order.id, reason="Customer cancelled")
+
+    assert res.success is True
+    assert res.data["audit_event_logged"] is False
+    assert res.data.get("audit_warning") == "Failed to record audit event in database."
+    assert any("Audit event logging failed" in rec.message for rec in caplog.records)
+    assert "Event logger error" not in str(res.data)
+

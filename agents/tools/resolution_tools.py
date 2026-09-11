@@ -1,4 +1,5 @@
 import uuid
+import logging
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
@@ -9,6 +10,8 @@ from backend.app.services.refund_service import RefundService
 from backend.app.services.replacement_service import ReplacementService
 from backend.app.services.cancellation_service import CancellationService
 from backend.app.services.case_service import CaseService
+
+logger = logging.getLogger("nova.agents.resolution_tools")
 
 
 # --- Refund Tool ---
@@ -29,6 +32,7 @@ class RefundData(BaseModel):
     requires_approval: bool
     created_at: datetime
     processed_at: Optional[datetime] = None
+    audit_event_logged: bool = Field(True, description="Whether audit event was successfully recorded")
 
 
 class CreateRefundTool(BaseTool):
@@ -51,18 +55,6 @@ class CreateRefundTool(BaseTool):
             case_id=eff_case_id,
         )
 
-        data = RefundData(
-            refund_id=refund.id,
-            case_id=refund.case_id,
-            order_id=refund.order_id,
-            amount=refund.amount,
-            reason=refund.reason,
-            status=refund.status,
-            requires_approval=refund.requires_approval,
-            created_at=refund.created_at,
-            processed_at=refund.processed_at,
-        )
-
         if refund.requires_approval or refund.status == "pending":
             result_status = ToolResultStatus.APPROVAL_REQUIRED
             msg = f"Refund of ${refund.amount} staged for human approval (case: {refund.case_id})."
@@ -70,7 +62,8 @@ class CreateRefundTool(BaseTool):
             result_status = ToolResultStatus.SUCCESS
             msg = f"Refund of ${refund.amount} completed successfully (case: {refund.case_id})."
 
-        # Log audit event if case exists
+        # Log audit event with proper error handling (never silently swallow)
+        audit_logged = True
         try:
             CaseService.log_agent_event(
                 db=context.db,
@@ -82,13 +75,36 @@ class CreateRefundTool(BaseTool):
                 status=result_status.value,
                 message=msg,
             )
-        except Exception:
-            pass
+        except Exception as ex:
+            logger.error(
+                "Audit event logging failed for tool '%s' on case '%s': %s",
+                self.name,
+                refund.case_id,
+                type(ex).__name__,
+            )
+            audit_logged = False
+
+        data = RefundData(
+            refund_id=refund.id,
+            case_id=refund.case_id,
+            order_id=refund.order_id,
+            amount=refund.amount,
+            reason=refund.reason,
+            status=refund.status,
+            requires_approval=refund.requires_approval,
+            created_at=refund.created_at,
+            processed_at=refund.processed_at,
+            audit_event_logged=audit_logged,
+        )
+
+        res_dict = data.model_dump(mode="json")
+        if not audit_logged:
+            res_dict["audit_warning"] = "Failed to record audit event in database."
 
         return ToolResult(
             success=True,
             tool_name=self.name,
-            data=data.model_dump(mode="json"),
+            data=res_dict,
             status=result_status,
             message=msg,
         )
@@ -115,6 +131,7 @@ class ReplacementData(BaseModel):
     status: str
     requires_approval: bool
     created_at: datetime
+    audit_event_logged: bool = Field(True, description="Whether audit event was successfully recorded")
 
 
 class CreateReplacementTool(BaseTool):
@@ -140,24 +157,13 @@ class CreateReplacementTool(BaseTool):
             case_id=eff_case_id,
         )
 
-        data = ReplacementData(
-            replacement_id=replacement.id,
-            case_id=replacement.case_id,
-            order_id=replacement.order_id,
-            product_id=replacement.product_id,
-            warehouse_id=replacement.warehouse_id,
-            quantity=replacement.quantity,
-            reason=replacement.reason,
-            status=replacement.status,
-            requires_approval=replacement.requires_approval,
-            created_at=replacement.created_at,
-        )
-
         msg = (
             f"Replacement order created for {replacement.quantity} unit(s) "
             f"dispatched from warehouse '{replacement.warehouse_id}'."
         )
 
+        # Log audit event with proper error handling (never silently swallow)
+        audit_logged = True
         try:
             CaseService.log_agent_event(
                 db=context.db,
@@ -174,13 +180,37 @@ class CreateReplacementTool(BaseTool):
                 status=ToolResultStatus.SUCCESS.value,
                 message=msg,
             )
-        except Exception:
-            pass
+        except Exception as ex:
+            logger.error(
+                "Audit event logging failed for tool '%s' on case '%s': %s",
+                self.name,
+                replacement.case_id,
+                type(ex).__name__,
+            )
+            audit_logged = False
+
+        data = ReplacementData(
+            replacement_id=replacement.id,
+            case_id=replacement.case_id,
+            order_id=replacement.order_id,
+            product_id=replacement.product_id,
+            warehouse_id=replacement.warehouse_id,
+            quantity=replacement.quantity,
+            reason=replacement.reason,
+            status=replacement.status,
+            requires_approval=replacement.requires_approval,
+            created_at=replacement.created_at,
+            audit_event_logged=audit_logged,
+        )
+
+        res_dict = data.model_dump(mode="json")
+        if not audit_logged:
+            res_dict["audit_warning"] = "Failed to record audit event in database."
 
         return ToolResult(
             success=True,
             tool_name=self.name,
-            data=data.model_dump(mode="json"),
+            data=res_dict,
             status=ToolResultStatus.SUCCESS,
             message=msg,
         )
@@ -201,6 +231,7 @@ class CancellationData(BaseModel):
     status: str
     requires_approval: bool
     created_at: datetime
+    audit_event_logged: bool = Field(True, description="Whether audit event was successfully recorded")
 
 
 class CancelOrderTool(BaseTool):
@@ -222,18 +253,10 @@ class CancelOrderTool(BaseTool):
             case_id=eff_case_id,
         )
 
-        data = CancellationData(
-            cancellation_id=cancellation.id,
-            case_id=cancellation.case_id,
-            order_id=cancellation.order_id,
-            reason=cancellation.reason,
-            status=cancellation.status,
-            requires_approval=cancellation.requires_approval,
-            created_at=cancellation.created_at,
-        )
-
         msg = f"Order '{cancellation.order_id}' successfully cancelled."
 
+        # Log audit event with proper error handling (never silently swallow)
+        audit_logged = True
         try:
             CaseService.log_agent_event(
                 db=context.db,
@@ -245,13 +268,34 @@ class CancelOrderTool(BaseTool):
                 status=ToolResultStatus.SUCCESS.value,
                 message=msg,
             )
-        except Exception:
-            pass
+        except Exception as ex:
+            logger.error(
+                "Audit event logging failed for tool '%s' on case '%s': %s",
+                self.name,
+                cancellation.case_id,
+                type(ex).__name__,
+            )
+            audit_logged = False
+
+        data = CancellationData(
+            cancellation_id=cancellation.id,
+            case_id=cancellation.case_id,
+            order_id=cancellation.order_id,
+            reason=cancellation.reason,
+            status=cancellation.status,
+            requires_approval=cancellation.requires_approval,
+            created_at=cancellation.created_at,
+            audit_event_logged=audit_logged,
+        )
+
+        res_dict = data.model_dump(mode="json")
+        if not audit_logged:
+            res_dict["audit_warning"] = "Failed to record audit event in database."
 
         return ToolResult(
             success=True,
             tool_name=self.name,
-            data=data.model_dump(mode="json"),
+            data=res_dict,
             status=ToolResultStatus.SUCCESS,
             message=msg,
         )

@@ -225,7 +225,13 @@ class VerifyResolutionTool(BaseTool):
             observed_state=ver_resp.observed_state,
             message=ver_resp.message,
         )
-        status = ToolResultStatus.SUCCESS if ver_resp.verified else ToolResultStatus.BLOCKED
+        if ver_resp.verified:
+            status = ToolResultStatus.SUCCESS
+        elif ver_resp.observed_state and ver_resp.observed_state.get("is_pending_approval"):
+            status = ToolResultStatus.APPROVAL_REQUIRED
+        else:
+            status = ToolResultStatus.BLOCKED
+
         return ToolResult(
             success=ver_resp.verified,
             tool_name=self.name,

@@ -49,20 +49,27 @@ class VerificationService:
                 is_verified = True
                 msg = f"Refund of ${refund.amount} verified in completed status."
             elif refund.status == "pending" and refund.requires_approval:
-                is_verified = True
-                msg = f"Refund of ${refund.amount} verified in pending approval status."
+                is_verified = False
+                msg = f"Refund of ${refund.amount} is awaiting approval (staged, pending supervisor review)."
+            elif refund.status == "rejected":
+                is_verified = False
+                msg = f"Refund of ${refund.amount} was rejected."
+            elif refund.status == "failed":
+                is_verified = False
+                msg = f"Refund of ${refund.amount} failed."
             else:
                 is_verified = False
-                msg = f"Refund status '{refund.status}' does not represent a valid verified state."
+                msg = f"Refund status '{refund.status}' does not represent a completed resolution."
 
             return VerificationResponse(
                 verified=is_verified,
                 case_id=case.id,
                 resolution_type="refund",
-                expected_state={"status": "completed or pending approval", "amount": str(refund.amount)},
+                expected_state={"status": "completed", "amount": str(refund.amount)},
                 observed_state={
                     "refund_status": refund.status,
                     "requires_approval": refund.requires_approval,
+                    "is_pending_approval": bool(refund.status == "pending" and refund.requires_approval),
                     "order_status": order.status if order else None,
                 },
                 message=msg,
