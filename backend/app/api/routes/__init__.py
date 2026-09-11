@@ -5,6 +5,7 @@ from backend.app.api.routes.shipments import router as shipments_router
 from backend.app.api.routes.inventory import router as inventory_router
 from backend.app.api.routes.policies import router as policies_router
 from backend.app.api.routes.resolutions import router as resolutions_router
+from backend.app.api.routes.agent import router as agent_router
 
 __all__ = [
     "health_router",
@@ -14,4 +15,5 @@ __all__ = [
     "inventory_router",
     "policies_router",
     "resolutions_router",
+    "agent_router",
 ]

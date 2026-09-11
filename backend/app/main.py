@@ -21,6 +21,7 @@ from backend.app.api.routes import (
     inventory_router,
     policies_router,
     resolutions_router,
+    agent_router,
 )
 
 app = FastAPI(
@@ -146,6 +147,7 @@ app.include_router(shipments_router, prefix=settings.API_V1_STR)
 app.include_router(inventory_router, prefix=settings.API_V1_STR)
 app.include_router(policies_router, prefix=settings.API_V1_STR)
 app.include_router(resolutions_router, prefix=settings.API_V1_STR)
+app.include_router(agent_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/", summary="Root Endpoint")

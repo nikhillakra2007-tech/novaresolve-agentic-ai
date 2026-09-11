@@ -87,8 +87,14 @@ class ToolRegistry:
     ) -> ToolResult:
         """Executes a registered tool securely. Rejects unregistered or arbitrary execution."""
         # 1. Reject arbitrary SQL / Python / bash execution patterns
-        prohibited = {"raw_sql", "execute_sql", "eval", "exec", "query_database", "shell"}
-        if name in prohibited or any(p in name.lower() for p in prohibited):
+        prohibited = {"raw_sql", "execute_sql", "eval", "exec", "exec_python", "query_database", "shell", "bash", "python"}
+        name_lower = name.lower()
+        is_prohibited = (
+            name_lower in prohibited
+            or name_lower.startswith(("exec_", "eval_"))
+            or any(p in name_lower for p in ["raw_sql", "execute_sql", "query_database"])
+        )
+        if is_prohibited:
             return ToolResult(
                 success=False,
                 tool_name=name,

@@ -1,4 +1,6 @@
 import uuid
+from decimal import Decimal
+from datetime import datetime, date
 from typing import Optional, Any, Dict, Union
 from sqlalchemy.orm import Session
 
@@ -135,7 +137,17 @@ class CaseService:
 
     @staticmethod
     def _sanitize_payload(payload: Any) -> Any:
-        """Redacts sensitive credentials or tokens from audit logs."""
+        """Redacts sensitive credentials or tokens from audit logs and ensures JSON serializability."""
+        if payload is None:
+            return None
+        if isinstance(payload, uuid.UUID):
+            return str(payload)
+        if isinstance(payload, Decimal):
+            return float(payload)
+        if isinstance(payload, (datetime, date)):
+            return payload.isoformat()
+        if isinstance(payload, (list, tuple, set)):
+            return [CaseService._sanitize_payload(item) for item in payload]
         if not isinstance(payload, dict):
             return payload
 
@@ -143,9 +155,7 @@ class CaseService:
         sensitive_keys = {"password", "secret", "token", "api_key", "auth", "credential"}
         for k, v in payload.items():
             if any(sens in str(k).lower() for sens in sensitive_keys):
-                redacted[k] = "[REDACTED]"
-            elif isinstance(v, dict):
-                redacted[k] = CaseService._sanitize_payload(v)
+                redacted[str(k)] = "[REDACTED]"
             else:
-                redacted[k] = v
+                redacted[str(k)] = CaseService._sanitize_payload(v)
         return redacted
