@@ -40,7 +40,11 @@ def test_scenario_2_replacement_fails_primary_succeeds_alternate(db_session: Ses
     customer = db_session.query(Customer).filter(Customer.email == "scenario2_bob@example.com").first()
     assert customer is not None
 
-    case = db_session.query(Case).filter(Case.customer_id == customer.id).first()
+    case = (
+        db_session.query(Case)
+        .filter(Case.customer_id == customer.id, Case.issue_type == "replacement_out_of_stock")
+        .first()
+    )
     assert case is not None
     assert case.status == "replanning"
 

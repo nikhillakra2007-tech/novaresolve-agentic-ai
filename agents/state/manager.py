@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from agents.state.models import AgentState, AgentObservation
 from agents.tools.base import ToolResultStatus
 from backend.app.services.case_service import CaseService
+from backend.app.db.models.agent_event import AgentEvent
 
 logger = logging.getLogger("nova.agents.state_manager")
 
@@ -17,6 +18,15 @@ class StateManager:
     def initialize_state(db: Session, case_id: uuid.UUID) -> AgentState:
         """Loads a case from the database and initializes a fresh AgentState context."""
         case = CaseService.get_case_by_id(db, case_id)
+
+        has_approval = db.query(AgentEvent).filter(
+            AgentEvent.case_id == case.id,
+            AgentEvent.event_type == "APPROVAL_GRANTED",
+        ).first()
+
+        approval_status = "approved" if has_approval else (
+            "pending" if case.requires_approval and case.status == "awaiting_approval" else "not_required"
+        )
 
         # Initialize base state from persisted case
         state = AgentState(
@@ -30,7 +40,7 @@ class StateManager:
             current_step=case.current_step,
             risk_level=case.risk_level,
             requires_approval=case.requires_approval,
-            approval_status="pending" if case.requires_approval and case.status == "awaiting_approval" else "not_required",
+            approval_status=approval_status,
             resolution_type=case.resolution_type,
             resolution_status=case.resolution_status,
         )
@@ -60,25 +70,26 @@ class StateManager:
         )
 
         # Update evidence based on tool observations
-        if observation.status == ToolResultStatus.SUCCESS and observation.data:
-            if observation.tool_name == "get_customer":
-                state.evidence["customer"] = observation.data
-            elif observation.tool_name == "get_order":
-                state.evidence["order"] = observation.data
-            elif observation.tool_name == "get_shipment":
-                state.evidence["shipment"] = observation.data
-            elif observation.tool_name == "check_inventory":
-                inv_data = observation.data
-                prod_id = inv_data.get("product_id")
-                wh_id = inv_data.get("warehouse_id")
-                if prod_id and wh_id:
-                    key = f"{prod_id}_{wh_id}"
-                    state.evidence["inventory"][key] = inv_data
-                elif prod_id:
-                    state.evidence["inventory"][str(prod_id)] = inv_data
-            elif observation.tool_name == "search_alternative_inventory":
+        if observation.data:
+            if observation.tool_name == "search_alternative_inventory":
                 alternatives = observation.data.get("alternatives", [])
                 state.evidence["alternative_inventory"] = alternatives
+            elif observation.status == ToolResultStatus.SUCCESS:
+                if observation.tool_name == "get_customer":
+                    state.evidence["customer"] = observation.data
+                elif observation.tool_name == "get_order":
+                    state.evidence["order"] = observation.data
+                elif observation.tool_name == "get_shipment":
+                    state.evidence["shipment"] = observation.data
+                elif observation.tool_name == "check_inventory":
+                    inv_data = observation.data
+                    prod_id = inv_data.get("product_id")
+                    wh_id = inv_data.get("warehouse_id")
+                    if prod_id and wh_id:
+                        key = f"{prod_id}_{wh_id}"
+                        state.evidence["inventory"][key] = inv_data
+                    elif prod_id:
+                        state.evidence["inventory"][str(prod_id)] = inv_data
 
         # Policy evaluations
         if observation.tool_name == "evaluate_policy" and observation.data:
@@ -87,9 +98,10 @@ class StateManager:
             if "risk_level" in p_data and p_data["risk_level"]:
                 state.risk_level = p_data["risk_level"]
             if "requires_approval" in p_data:
-                state.requires_approval = bool(p_data["requires_approval"])
-                if state.requires_approval:
-                    state.approval_status = "pending"
+                if state.approval_status != "approved":
+                    state.requires_approval = bool(p_data["requires_approval"])
+                    if state.requires_approval:
+                        state.approval_status = "pending"
 
         # Action execution outcomes
         if observation.tool_name == "create_refund":

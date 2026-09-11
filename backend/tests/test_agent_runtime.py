@@ -16,6 +16,7 @@ from backend.app.db.models.agent_event import AgentEvent
 from backend.app.db.models.refund import Refund
 from backend.app.db.models.replacement import Replacement
 from backend.app.db.models.cancellation import Cancellation
+from backend.app.db.models.policy import Policy
 
 from agents.runtime.agent import NovaResolveAgent
 from agents.runtime.loop import AgentLoop
@@ -384,11 +385,9 @@ def test_agent_high_risk_approval_gate_and_resume(db_session: Session):
     assert case.status == "awaiting_approval"
     assert case.requires_approval is True
 
-    # Confirm refund is pending
+    # Confirm consequential action (refund) was NOT executed prior to approval
     staged_refund = db_session.query(Refund).filter(Refund.case_id == case.id).first()
-    assert staged_refund is not None
-    assert staged_refund.status == "pending"
-    assert staged_refund.requires_approval is True
+    assert staged_refund is None
 
     # Step 2: Supervisor Grants Approval via NovaResolveAgent.resume()
     resume_res: AgentRunResult = NovaResolveAgent.resume(
@@ -407,9 +406,10 @@ def test_agent_high_risk_approval_gate_and_resume(db_session: Session):
     assert case.status == "resolved"
     assert case.requires_approval is False
 
-    db_session.refresh(staged_refund)
-    assert staged_refund.status == "completed"
-    assert staged_refund.requires_approval is False
+    completed_refund = db_session.query(Refund).filter(Refund.case_id == case.id).first()
+    assert completed_refund is not None
+    assert completed_refund.status == "completed"
+    assert completed_refund.requires_approval is False
 
 
 # ============================================================
@@ -710,3 +710,333 @@ def test_agent_loop_protection_safeguard(db_session: Session):
     assert res.status == "escalated"
     assert res.steps_executed <= AgentLoop.MAX_AGENT_STEPS
     assert "escalated" in res.final_outcome.lower()
+
+
+# ============================================================
+# 12. FOCUSED CORRECTION PASS TESTS (A, B, C, D)
+# ============================================================
+
+def test_risk_evaluator_approval_gate_prevents_pre_approval_action(db_session: Session):
+    """Test A: Verifies that RiskEvaluator is actively integrated into the loop
+    decision boundary, transitions the case to awaiting_approval, records APPROVAL_REQUIRED,
+    and prevents consequential state-changing actions from executing before approval.
+    Proves behavior comes from integrated RiskEvaluator rather than pre-existing requires_approval.
+    """
+    customer = make_test_customer(db_session)
+    order = Order(
+        customer_id=customer.id,
+        status="delivered",
+        total_amount=Decimal("150.00"),  # > $100 threshold evaluated by RiskEvaluator
+        shipping_address="123 Risk Gate Way",
+        order_date=datetime.now(timezone.utc) - timedelta(days=2),
+    )
+    db_session.add(order)
+    db_session.flush()
+
+    shipment = Shipment(
+        order_id=order.id,
+        tracking_number=f"TRK_{uuid.uuid4().hex[:8]}",
+        carrier="FedEx",
+        status="delivered",
+        actual_delivery=datetime.now(timezone.utc) - timedelta(days=1),
+    )
+    db_session.add(shipment)
+    db_session.flush()
+
+    # Case explicitly starts with requires_approval=False
+    case = Case(
+        customer_id=customer.id,
+        order_id=order.id,
+        issue_type="refund",
+        customer_goal="Item broken on arrival. Please issue refund.",
+        status="open",
+        risk_level="high",
+        requires_approval=False,  # Explicitly False
+    )
+    db_session.add(case)
+    db_session.commit()
+
+    # Run agent loop
+    result = NovaResolveAgent.run(db=db_session, case_id=case.id)
+
+    # Agent should halt at awaiting_approval via RiskEvaluator gate
+    assert result.success is False
+    assert result.status == "awaiting_approval"
+    assert result.requires_approval is True
+
+    # Case in DB must reflect awaiting_approval
+    db_session.refresh(case)
+    assert case.status == "awaiting_approval"
+    assert case.requires_approval is True
+
+    # Crucial assertion: Consequential action must NOT have executed before approval
+    refund_record = db_session.query(Refund).filter(Refund.case_id == case.id).first()
+    assert refund_record is None
+
+    # Audit events must record APPROVAL_REQUIRED
+    events = (
+        db_session.query(AgentEvent)
+        .filter(AgentEvent.case_id == case.id)
+        .order_by(AgentEvent.created_at.asc())
+        .all()
+    )
+    event_types = [e.event_type for e in events]
+    assert "APPROVAL_REQUIRED" in event_types
+
+
+def test_unknown_intent_escalates_without_refund(db_session: Session):
+    """Test B: Ambiguous / unknown customer intent must not default to refund.
+    Planner returns no actionable resolution, and AgentLoop safely escalates
+    without creating financial or state mutations.
+    """
+    customer = make_test_customer(db_session)
+    order = Order(
+        customer_id=customer.id,
+        status="delivered",
+        total_amount=Decimal("65.00"),
+        shipping_address="789 Ambiguous Lane",
+        order_date=datetime.now(timezone.utc) - timedelta(days=4),
+    )
+    db_session.add(order)
+    db_session.flush()
+
+    case = Case(
+        customer_id=customer.id,
+        order_id=order.id,
+        issue_type="unknown",
+        customer_goal="I have a problem with my order and need help.",
+        status="open",
+        risk_level="low",
+    )
+    db_session.add(case)
+    db_session.commit()
+
+    result = NovaResolveAgent.run(db=db_session, case_id=case.id)
+
+    # Must safely escalate
+    assert result.success is False
+    assert result.status == "escalated"
+
+    # MANDATORY: No Refund record was created
+    refund = db_session.query(Refund).filter(Refund.case_id == case.id).first()
+    assert refund is None
+
+    # No replacement or cancellation created either
+    replacement = db_session.query(Replacement).filter(Replacement.case_id == case.id).first()
+    assert replacement is None
+    cancellation = db_session.query(Cancellation).filter(Cancellation.case_id == case.id).first()
+    assert cancellation is None
+
+
+def test_refund_pivot_reevaluates_policy(db_session: Session):
+    """Test C: Replacement inventory exhausted across all warehouses.
+    Agent pivots from replacement to refund, but re-evaluates policy first.
+    When policy denies refund, agent escalates without creating refund.
+    When policy requires approval, agent halts at awaiting_approval.
+    """
+    customer = make_test_customer(db_session)
+    test_prod = Product(
+        sku=f"SKU_STOCKOUT_{uuid.uuid4().hex[:6]}",
+        name="Zero Stock Gadget",
+        price=Decimal("60.00"),
+        category="Electronics",
+    )
+    u_wh = uuid.uuid4().hex[:6]
+    wh_primary = Warehouse(name=f"Depleted WH 1 {u_wh}", location="Region A", status="active")
+    wh_secondary = Warehouse(name=f"Depleted WH 2 {u_wh}", location="Region B", status="active")
+    db_session.add(test_prod)
+    db_session.add(wh_primary)
+    db_session.add(wh_secondary)
+    db_session.flush()
+
+    # Both warehouses have 0 stock
+    inv1 = Inventory(product_id=test_prod.id, warehouse_id=wh_primary.id, quantity=0, reserved_quantity=0)
+    inv2 = Inventory(product_id=test_prod.id, warehouse_id=wh_secondary.id, quantity=0, reserved_quantity=0)
+    db_session.add(inv1)
+    db_session.add(inv2)
+    db_session.flush()
+
+    order = Order(
+        customer_id=customer.id,
+        status="delivered",
+        total_amount=Decimal("60.00"),
+        shipping_address="555 Stockout Blvd",
+        order_date=datetime.now(timezone.utc) - timedelta(days=2),
+    )
+    db_session.add(order)
+    db_session.flush()
+
+    item = OrderItem(
+        order_id=order.id,
+        product_id=test_prod.id,
+        quantity=1,
+        unit_price=Decimal("60.00"),
+    )
+    db_session.add(item)
+    db_session.flush()
+
+    shipment = Shipment(
+        order_id=order.id,
+        tracking_number=f"TRK_{uuid.uuid4().hex[:8]}",
+        carrier="UPS",
+        status="delivered",
+        actual_delivery=datetime.now(timezone.utc) - timedelta(days=1),
+    )
+    db_session.add(shipment)
+    db_session.flush()
+
+    # Scenario C1: Restrictive policy denies refund
+    active_policies = db_session.query(Policy).filter(Policy.issue_type == "refund", Policy.active == True).all()
+    for p in active_policies:
+        p.active = False
+    db_session.flush()
+
+    restrictive_policy = Policy(
+        issue_type="refund",
+        action="refund",
+        conditions={"max_amount": 10.00},  # Order is $60, so this policy will deny
+        risk_level="low",
+        priority=1,
+        active=True,
+    )
+    db_session.add(restrictive_policy)
+    db_session.flush()
+
+    case_c1 = Case(
+        customer_id=customer.id,
+        order_id=order.id,
+        issue_type="replacement",
+        customer_goal="Item arrived damaged. Please send replacement.",
+        status="open",
+        risk_level="low",
+        current_plan=[{"step": 1, "primary_warehouse_id": str(wh_primary.id)}],
+    )
+    db_session.add(case_c1)
+    db_session.commit()
+
+    res_c1 = NovaResolveAgent.run(db=db_session, case_id=case_c1.id)
+
+    # Because replacement stock was 0 everywhere and candidate refund was denied by policy,
+    # agent must escalate and NOT blindly issue a refund!
+    assert res_c1.success is False
+    assert res_c1.status == "escalated"
+    refund_c1 = db_session.query(Refund).filter(Refund.case_id == case_c1.id).first()
+    assert refund_c1 is None
+
+    # Restore policies
+    db_session.delete(restrictive_policy)
+    for p in active_policies:
+        p.active = True
+    db_session.commit()
+
+    # Scenario C2: Policy requires approval for refund alternative (high amount >= $100)
+    order_c2 = Order(
+        customer_id=customer.id,
+        status="delivered",
+        total_amount=Decimal("150.00"),  # High value refund alternative
+        shipping_address="555 Stockout Blvd",
+        order_date=datetime.now(timezone.utc) - timedelta(days=2),
+    )
+    db_session.add(order_c2)
+    db_session.flush()
+
+    item_c2 = OrderItem(
+        order_id=order_c2.id,
+        product_id=test_prod.id,
+        quantity=1,
+        unit_price=Decimal("150.00"),
+    )
+    db_session.add(item_c2)
+    db_session.flush()
+
+    shipment_c2 = Shipment(
+        order_id=order_c2.id,
+        tracking_number=f"TRK_{uuid.uuid4().hex[:8]}",
+        carrier="UPS",
+        status="delivered",
+        actual_delivery=datetime.now(timezone.utc) - timedelta(days=1),
+    )
+    db_session.add(shipment_c2)
+    db_session.flush()
+
+    case_c2 = Case(
+        customer_id=customer.id,
+        order_id=order_c2.id,
+        issue_type="replacement",
+        customer_goal="Item arrived damaged. Please send replacement.",
+        status="open",
+        risk_level="low",
+        requires_approval=False,
+        current_plan=[{"step": 1, "primary_warehouse_id": str(wh_primary.id)}],
+    )
+    db_session.add(case_c2)
+    db_session.commit()
+
+    res_c2 = NovaResolveAgent.run(db=db_session, case_id=case_c2.id)
+
+    # Agent detects 0 stock -> pivots to evaluate refund policy -> policy requires approval
+    # -> halts at awaiting_approval -> no final resolution without supervisor approval!
+    assert res_c2.success is False
+    assert res_c2.status == "awaiting_approval"
+    assert res_c2.requires_approval is True
+    refund_c2 = db_session.query(Refund).filter(Refund.case_id == case_c2.id).first()
+    assert refund_c2 is None
+
+
+def test_verification_failure_enters_replanning(db_session: Session):
+    """Test D: Verification failure triggers explicit replanning / recovery path,
+    recording VERIFICATION_FAILED and CONSTRAINT_DETECTED, and never falsely resolving.
+    """
+    customer = make_test_customer(db_session)
+    order = Order(
+        customer_id=customer.id,
+        status="delivered",
+        total_amount=Decimal("50.00"),
+        shipping_address="999 Verify Path",
+        order_date=datetime.now(timezone.utc) - timedelta(days=3),
+    )
+    db_session.add(order)
+    db_session.flush()
+
+    case = Case(
+        customer_id=customer.id,
+        order_id=order.id,
+        issue_type="refund",
+        customer_goal="Item broken, refund please.",
+        status="executing",
+        resolution_type="refund",
+        resolution_status="completed",
+    )
+    db_session.add(case)
+    db_session.flush()
+
+    # Deterministic mismatch: A rejected refund record
+    mismatched_refund = Refund(
+        case_id=case.id,
+        order_id=order.id,
+        amount=Decimal("50.00"),
+        reason="defective item",
+        status="rejected",
+        requires_approval=False,
+    )
+    db_session.add(mismatched_refund)
+    db_session.commit()
+
+    result = NovaResolveAgent.run(db=db_session, case_id=case.id)
+
+    # Must NOT be resolved!
+    assert result.success is False
+    assert result.status != "resolved"
+    assert result.status == "escalated"
+
+    events = (
+        db_session.query(AgentEvent)
+        .filter(AgentEvent.case_id == case.id)
+        .order_by(AgentEvent.created_at.asc())
+        .all()
+    )
+    event_types = [e.event_type for e in events]
+    assert "VERIFICATION_FAILED" in event_types
+    assert "CONSTRAINT_DETECTED" in event_types
+    assert "REPLAN_STARTED" in event_types
+    assert "RESOLVED" not in event_types

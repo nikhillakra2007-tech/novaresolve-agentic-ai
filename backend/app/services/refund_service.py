@@ -10,6 +10,7 @@ from backend.app.db.models.case import Case
 from backend.app.db.models.customer import Customer
 from backend.app.db.models.shipment import Shipment
 from backend.app.db.models.refund import Refund
+from backend.app.db.models.agent_event import AgentEvent
 from backend.app.schemas.resolution import RefundCreateRequest
 from backend.app.services.customer_service import CustomerService
 from backend.app.services.policy_service import PolicyService
@@ -126,8 +127,20 @@ class RefundService:
             or eff_amount >= Decimal("100.00")
         )
 
+        has_approval = False
+        if eff_case_id:
+            case_obj = db.query(Case).filter(Case.id == eff_case_id).first()
+            if case_obj and not case_obj.requires_approval:
+                approval_event = db.query(AgentEvent).filter(
+                    AgentEvent.case_id == eff_case_id,
+                    AgentEvent.event_type == "APPROVAL_GRANTED",
+                ).first()
+                if approval_event:
+                    has_approval = True
+                    requires_approval = False
+
         status_str = "pending" if requires_approval else "completed"
-        approved_by = None if requires_approval else "agent_auto_policy"
+        approved_by = "supervisor" if has_approval else (None if requires_approval else "agent_auto_policy")
         processed_at = None if requires_approval else datetime.now(timezone.utc)
 
         # 6. Perform transactional mutation (Case creation deferred until all validations pass)

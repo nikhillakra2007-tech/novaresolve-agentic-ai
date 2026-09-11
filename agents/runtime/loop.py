@@ -189,6 +189,27 @@ class AgentLoop:
                 break
 
             # -------------------------------------------------------------
+            # 4b. Pre-Execution Consequential Action Risk & Approval Gate
+            # -------------------------------------------------------------
+            consequential_actions = {"create_refund", "create_replacement", "cancel_order"}
+            if action.tool_name in consequential_actions:
+                if RiskEvaluator.should_require_approval(state):
+                    logger.info(f"Consequential action '{action.tool_name}' requires supervisor approval. Halting execution.")
+                    state.current_status = "awaiting_approval"
+                    state.requires_approval = True
+                    state.approval_status = "pending"
+                    StateManager.record_event(
+                        db=db,
+                        state=state,
+                        event_type="APPROVAL_REQUIRED",
+                        tool_name=action.tool_name,
+                        status="approval_required",
+                        message=f"Action '{action.tool_name}' requires supervisor approval before execution.",
+                    )
+                    StateManager.persist_state(db, state)
+                    break
+
+            # -------------------------------------------------------------
             # 5. Execute Action
             # -------------------------------------------------------------
             state.current_step = action.tool_name

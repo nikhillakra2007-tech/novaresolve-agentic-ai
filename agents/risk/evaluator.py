@@ -16,8 +16,12 @@ class RiskEvaluator:
     @classmethod
     def should_require_approval(cls, state: AgentState) -> bool:
         """Determines if the current case state and planned resolution requires supervisor approval."""
-        # 1. Direct policy requirement
-        if state.requires_approval:
+        # 0. If supervisor already granted approval, do not gate again
+        if state.approval_status == "approved":
+            return False
+
+        # 1. Direct state flags
+        if state.requires_approval or state.risk_level == "high":
             return True
 
         # 2. Check policy evidence
@@ -34,7 +38,7 @@ class RiskEvaluator:
         order_data = state.evidence.get("order")
         if order_data and "total_amount" in order_data:
             amt = Decimal(str(order_data["total_amount"]))
-            if amt > cls.HIGH_RISK_REFUND_THRESHOLD:
+            if amt >= cls.HIGH_RISK_REFUND_THRESHOLD:
                 return True
 
         return False

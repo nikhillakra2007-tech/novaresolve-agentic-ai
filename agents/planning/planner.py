@@ -16,7 +16,7 @@ class AgentPlanner:
     """
 
     @staticmethod
-    def infer_action_type(goal: str, issue_type: str) -> str:
+    def infer_action_type(goal: str, issue_type: str) -> Optional[str]:
         """Infers the intended resolution type from the customer goal and case issue type."""
         goal_lower = goal.lower()
         issue_lower = issue_type.lower()
@@ -27,7 +27,7 @@ class AgentPlanner:
             return "cancellation"
         elif "refund" in goal_lower or "return" in goal_lower or "refund" in issue_lower:
             return "refund"
-        return "refund"
+        return None
 
     @staticmethod
     def extract_reason(goal: str, issue_type: str) -> str:
@@ -81,12 +81,17 @@ class AgentPlanner:
         if state.order_id and state.evidence.get("shipment") is None:
             return ExecutionPhase.INVESTIGATION
 
+        # Check for unknown / unsupported customer intent after basic investigation
+        action_type = cls.infer_action_type(state.customer_goal, state.issue_type)
+        if action_type is None:
+            logger.warning(f"Unknown or ambiguous customer intent: goal='{state.customer_goal}', issue_type='{state.issue_type}'")
+            return ExecutionPhase.ESCALATED
+
         # 3. Check Policy Evaluation Phase
         if state.evidence.get("policy") is None:
             return ExecutionPhase.POLICY_CHECK
 
         # 4. Check Pre-Action Verification Phase (Inventory for replacements)
-        action_type = cls.infer_action_type(state.customer_goal, state.issue_type)
         if action_type == "replacement":
             # Check if we have verified stock for either primary or alternative warehouse
             has_stock_check = bool(state.evidence.get("inventory")) or bool(state.evidence.get("alternative_inventory"))
@@ -107,6 +112,10 @@ class AgentPlanner:
     def select_action(cls, state: AgentState) -> Optional[AgentAction]:
         """Selects the next discrete AgentAction based on the current goal and accumulated evidence."""
         phase = cls.determine_phase(state)
+
+        if phase == ExecutionPhase.ESCALATED:
+            state.failure_reason = f"Cannot determine safe autonomous resolution for customer goal: '{state.customer_goal}'"
+            return None
 
         # -------------------------------------------------------------
         # Phase 1: INVESTIGATION
@@ -235,12 +244,54 @@ class AgentPlanner:
                 product_id = uuid.UUID(str(target_item["product_id"]))
 
                 # Determine target warehouse: check if alternative warehouse was found
-                alternatives = state.evidence.get("alternative_inventory", [])
+                alternatives = state.evidence.get("alternative_inventory")
                 if alternatives:
                     # Choose first alternative warehouse with stock
                     chosen_wh = alternatives[0]
                     warehouse_id = uuid.UUID(str(chosen_wh["warehouse_id"]))
                     rationale_txt = f"Create replacement item from alternative warehouse '{chosen_wh.get('warehouse_name')}'."
+                    return AgentAction(
+                        tool_name="create_replacement",
+                        parameters={
+                            "order_id": state.order_id,
+                            "product_id": product_id,
+                            "warehouse_id": warehouse_id,
+                            "quantity": 1,
+                            "reason": f"Damaged item replacement ({reason})",
+                        },
+                        rationale=rationale_txt,
+                        expected_outcome="Replacement order created and stock reserved.",
+                    )
+                elif alternatives == []:
+                    # Alternatives were searched and NONE exist anywhere in the network!
+                    # Pivot strategy to evaluate policy for refund!
+                    logger.info("Replacement inventory exhausted across entire network. Adapting goal to refund and evaluating refund policy.")
+                    state.issue_type = "refund"
+                    state.evidence["policy"] = None
+                    amount = Decimal(str(order_data.get("total_amount", "50.00")))
+                    order_status = order_data.get("status")
+                    days_since = 1
+                    if order_data and "order_date" in order_data and order_data["order_date"]:
+                        try:
+                            od = datetime.fromisoformat(str(order_data["order_date"]))
+                            days_since = max(0, (datetime.now(timezone.utc) - od).days)
+                        except Exception:
+                            days_since = 1
+                    shipment_data = state.evidence.get("shipment")
+                    return AgentAction(
+                        tool_name="evaluate_policy",
+                        parameters={
+                            "issue_type": "refund",
+                            "amount": amount,
+                            "order_status": order_status,
+                            "days_since_order": days_since,
+                            "has_shipment": shipment_data is not None,
+                            "shipment_status": shipment_data.get("status") if shipment_data else None,
+                            "reason": f"Inventory exhausted across fulfillment centers; candidate refund policy check ({reason})",
+                        },
+                        rationale="Replacement stock exhausted across network. Adapting resolution plan to evaluate policy for full refund.",
+                        expected_outcome="Policy compliance decision and approval requirements for candidate refund.",
+                    )
                 else:
                     primary_wh_id = cls._get_primary_warehouse_id(state)
                     if not primary_wh_id:
@@ -249,19 +300,18 @@ class AgentPlanner:
                             primary_wh_id = uuid.UUID(inv_keys[0].split("_")[1])
                     warehouse_id = primary_wh_id or uuid.uuid4()
                     rationale_txt = "Create replacement item from primary fulfillment warehouse."
-
-                return AgentAction(
-                    tool_name="create_replacement",
-                    parameters={
-                        "order_id": state.order_id,
-                        "product_id": product_id,
-                        "warehouse_id": warehouse_id,
-                        "quantity": 1,
-                        "reason": f"Damaged item replacement ({reason})",
-                    },
-                    rationale=rationale_txt,
-                    expected_outcome="Replacement order created and stock reserved.",
-                )
+                    return AgentAction(
+                        tool_name="create_replacement",
+                        parameters={
+                            "order_id": state.order_id,
+                            "product_id": product_id,
+                            "warehouse_id": warehouse_id,
+                            "quantity": 1,
+                            "reason": f"Damaged item replacement ({reason})",
+                        },
+                        rationale=rationale_txt,
+                        expected_outcome="Replacement order created and stock reserved.",
+                    )
 
             elif action_type == "refund":
                 order_data = state.evidence.get("order", {})

@@ -66,7 +66,7 @@ class AgentState(BaseModel):
             "shipment": None,
             "inventory": {},
             "policy": None,
-            "alternative_inventory": [],
+            "alternative_inventory": None,
         },
         description="Structured verified facts gathered during investigation",
     )

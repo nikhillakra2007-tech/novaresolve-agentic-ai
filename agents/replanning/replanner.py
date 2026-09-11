@@ -1,6 +1,7 @@
 import uuid
 import logging
 from typing import Optional, Dict, Any, List
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from agents.state.models import AgentState, AgentAction, AgentObservation
@@ -58,7 +59,7 @@ class AgentReplanner:
                     failed_wh_id = uuid.UUID(str(wh_val))
 
             # If we haven't searched alternatives yet, search them now!
-            if not state.evidence.get("alternative_inventory"):
+            if state.evidence.get("alternative_inventory") is None:
                 return AgentAction(
                     tool_name="search_alternative_inventory",
                     parameters={
@@ -95,18 +96,39 @@ class AgentReplanner:
                 )
 
             # If no alternatives exist anywhere in the network:
-            # Pivot from replacement to refund!
-            logger.info("No alternative warehouses found with stock. Adapting goal from replacement to refund.")
+            # Pivot from replacement to refund! Must re-evaluate policy first.
+            logger.info("No alternative warehouses found with stock. Pivoting strategy from replacement to refund; re-evaluating policy.")
+            state.issue_type = "refund"
+            state.evidence["policy"] = None
+
             amount = Decimal(str(order_data.get("total_amount", "50.00")))
+            reason = "damaged"
+            order_status = order_data.get("status") if order_data else None
+            days_since = 1
+            if order_data and "order_date" in order_data and order_data["order_date"]:
+                try:
+                    od = datetime.fromisoformat(str(order_data["order_date"]))
+                    days_since = max(0, (datetime.now(timezone.utc) - od).days)
+                except Exception:
+                    days_since = 1
+
+            shipment_data = state.evidence.get("shipment")
+            has_shipment = shipment_data is not None
+            shipment_status = shipment_data.get("status") if shipment_data else None
+
             return AgentAction(
-                tool_name="create_refund",
+                tool_name="evaluate_policy",
                 parameters={
-                    "order_id": state.order_id,
+                    "issue_type": "refund",
                     "amount": amount,
-                    "reason": "Stock unavailable across all fulfillment centers; automated refund issued.",
+                    "order_status": order_status,
+                    "days_since_order": days_since,
+                    "has_shipment": has_shipment,
+                    "shipment_status": shipment_status,
+                    "reason": f"Inventory exhausted across fulfillment network; refund policy evaluation ({reason})",
                 },
-                rationale="Inventory unavailable across entire warehouse network. Adapting resolution plan to full refund.",
-                expected_outcome="Refund issued in place of unfulfillable replacement.",
+                rationale="Inventory unavailable across entire warehouse network. Adapting resolution plan to evaluate policy for full refund.",
+                expected_outcome="Policy decision and approval requirements for candidate refund resolution.",
             )
 
         # ------------------------------------------------------------------
@@ -144,7 +166,28 @@ class AgentReplanner:
         # ------------------------------------------------------------------
         if observation.tool_name == "verify_resolution" and observation.status in {ToolResultStatus.BLOCKED, ToolResultStatus.FAILED}:
             logger.warning("Verification detected state mismatch. Evaluating recovery options.")
-            # If resolution failed, cannot verify. Return None to trigger escalation.
+            # Check if an alternative recovery resolution exists
+            if state.resolution_type == "replacement" and state.replan_count < cls.MAX_REPLANS:
+                order_data = state.evidence.get("order", {})
+                if order_data:
+                    logger.info("Replacement verification failed. Attempting controlled recovery: evaluate policy for refund.")
+                    state.issue_type = "refund"
+                    state.resolution_type = None
+                    state.resolution_status = None
+                    state.evidence["policy"] = None
+                    amount = Decimal(str(order_data.get("total_amount", "50.00")))
+                    return AgentAction(
+                        tool_name="evaluate_policy",
+                        parameters={
+                            "issue_type": "refund",
+                            "amount": amount,
+                            "order_status": order_data.get("status"),
+                            "reason": "Replacement failed verification; fallback refund policy evaluation",
+                        },
+                        rationale="Replacement verification failed. Evaluating policy for alternative refund recovery.",
+                        expected_outcome="Policy decision for recovery refund.",
+                    )
+            # If no safe alternative recovery action exists, return None to trigger controlled escalation
             return None
 
         return None

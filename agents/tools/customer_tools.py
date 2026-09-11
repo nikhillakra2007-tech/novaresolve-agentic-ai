@@ -18,6 +18,7 @@ class CustomerData(BaseModel):
     status: str
     is_active: bool
     is_blocked: bool
+    risk_level: str = "low"
 
 
 class GetCustomerTool(BaseTool):
@@ -33,6 +34,7 @@ class GetCustomerTool(BaseTool):
 
     def _run(self, context: ToolContext, params: GetCustomerInput) -> ToolResult:
         customer = CustomerService.get_customer_by_id(context.db, params.customer_id)
+        risk = getattr(customer, "risk_level", "low") or "low"
         data = CustomerData(
             customer_id=customer.id,
             name=customer.name,
@@ -41,6 +43,7 @@ class GetCustomerTool(BaseTool):
             status=customer.status,
             is_active=(customer.status == "active"),
             is_blocked=(customer.status == "blocked"),
+            risk_level=risk,
         )
         return ToolResult(
             success=True,

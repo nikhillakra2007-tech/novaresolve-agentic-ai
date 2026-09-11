@@ -79,13 +79,15 @@ class NovaResolveAgent:
 
         # Update case to executing and clear requires_approval gate
         case.status = "executing"
-        case.resolution_status = "completed"
+        if pending_refund:
+            case.resolution_status = "completed"
         case.requires_approval = False
         db.commit()
 
-        # Resume agent loop to verify the approved resolution state
+        # Resume agent loop to execute / verify the approved resolution state
         state = StateManager.initialize_state(db=db, case_id=case_id)
         state.approval_status = "approved"
         state.requires_approval = False
-        state.resolution_status = "completed"
+        if pending_refund:
+            state.resolution_status = "completed"
         return AgentLoop.run(db=db, state=state)
