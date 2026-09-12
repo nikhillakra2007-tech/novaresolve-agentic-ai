@@ -1,5 +1,6 @@
 # NovaResolve — Autonomous Agentic Customer Resolution Platform
 
+[![Vercel Deployment](https://img.shields.io/badge/Vercel-Live%20Demo%20Ready-000000.svg?style=flat&logo=vercel)](https://novaresolve-agentic-ai.vercel.app)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110.0-009688.svg?style=flat&logo=fastapi)](https://fastapi.tiangolo.com)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16+-336791.svg?style=flat&logo=postgresql)](https://www.postgresql.org)
 [![Google Gemini](https://img.shields.io/badge/LLM-Gemini_2.0_Flash-4285F4.svg?style=flat&logo=google)](https://aistudio.google.com)
@@ -15,7 +16,9 @@ Unlike simple chatbots that generate unverified text, NovaResolve operates as a 
 
 ## Live Links & Quick Access
 
+- **Live Production App (Vercel)**: [https://novaresolve-agentic-ai.vercel.app](https://novaresolve-agentic-ai.vercel.app)
 - **GitHub Repository**: [nikhillakra2007-tech/novaresolve-agentic-ai](https://github.com/nikhillakra2007-tech/novaresolve-agentic-ai)
+- **Live Health Status**: [https://novaresolve-agentic-ai.vercel.app/api/health](https://novaresolve-agentic-ai.vercel.app/api/health)
 - **Local Dashboard Interface**: [http://127.0.0.1:3000](http://127.0.0.1:3000)
 - **Interactive Swagger REST Docs**: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 - **ReDoc API Documentation**: [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
@@ -361,6 +364,7 @@ pytest backend/tests/ -v
 
 ```
 novaresolve-agentic-ai/
+├── api/                         # Vercel serverless functions (/health, /agent/cases, /agent/run, etc.)
 ├── backend/
 │   ├── app/
 │   │   ├── api/routes/          # FastAPI route controllers (/agent, /health, /refunds, etc.)
