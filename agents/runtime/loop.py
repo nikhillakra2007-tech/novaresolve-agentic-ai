@@ -10,6 +10,8 @@ from agents.replanning.replanner import AgentReplanner
 from agents.risk.evaluator import RiskEvaluator
 from agents.runtime.executor import ToolExecutor
 from agents.tools.base import ToolContext, ToolResultStatus
+from agents.tools import TOOL_REGISTRY
+from agents.planning.decision_provider import DecisionProvider, DecisionProviderFactory
 
 logger = logging.getLogger("nova.agents.loop")
 
@@ -22,9 +24,17 @@ class AgentLoop:
     MAX_SAME_TOOL_ATTEMPTS = 3
 
     @classmethod
-    def run(cls, db: Session, state: AgentState) -> AgentRunResult:
+    def run(
+        cls,
+        db: Session,
+        state: AgentState,
+        decision_provider: Optional[DecisionProvider] = None,
+    ) -> AgentRunResult:
         """Executes the autonomous loop until terminal resolution, approval gate, or safe escalation."""
         logger.info(f"Starting agent loop for case '{state.case_id}' (Goal: '{state.customer_goal}')")
+
+        if decision_provider is None:
+            decision_provider = DecisionProviderFactory.get_default_provider()
 
         context = ToolContext(db=db, case_id=state.case_id)
 
@@ -138,8 +148,36 @@ class AgentLoop:
                         break
 
             if not action:
-                # Regular planned action selection
-                action = AgentPlanner.select_action(state)
+                # Regular planned action selection via DecisionProvider
+                is_llm = getattr(decision_provider, "name", "") == "llm"
+                if is_llm:
+                    StateManager.record_event(
+                        db=db,
+                        state=state,
+                        event_type="LLM_DECISION_STARTED",
+                        message=f"Invoking LLM decision provider for case '{state.case_id}'",
+                    )
+
+                action = decision_provider.decide(state, tools=TOOL_REGISTRY.list_tools(), db=db)
+
+                if action and is_llm:
+                    decision_source = getattr(action, "source", "llm")
+                    event_type = "LLM_FALLBACK_USED" if decision_source == "deterministic_fallback" else "LLM_DECISION_COMPLETED"
+                    StateManager.record_event(
+                        db=db,
+                        state=state,
+                        event_type=event_type,
+                        tool_name=action.tool_name,
+                        message=f"Decision provider selected '{action.tool_name}' (source={decision_source}): {action.rationale}",
+                    )
+                elif not action and is_llm and state.failure_reason:
+                    StateManager.record_event(
+                        db=db,
+                        state=state,
+                        event_type="LLM_DECISION_FAILED",
+                        status="failed",
+                        message=state.failure_reason,
+                    )
 
             if not action:
                 # No further action available
@@ -217,6 +255,7 @@ class AgentLoop:
                 "step": state.attempt_count,
                 "tool_name": action.tool_name,
                 "rationale": action.rationale,
+                "source": getattr(action, "source", "deterministic"),
                 "parameters": {k: str(v) if isinstance(v, uuid.UUID) else v for k, v in action.parameters.items()},
             }
 

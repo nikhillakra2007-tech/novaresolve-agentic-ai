@@ -8,11 +8,10 @@ The system is designed to investigate customer issues, inspect enterprise data, 
 
 ## Current Architecture & Scope
 
-This repository contains **Phase 1 (Database & Backend Foundation)**, **Phase 2 (Domain Services & REST API Layer)**, and **Phase 3 (Agent Tools & Capability Layer)**:
+This repository contains **Phase 1 (Database Foundation)**, **Phase 2 (Domain Services & REST APIs)**, **Phase 3 (Agent Tools & Capability Layer)**, **Phase 4 (Autonomous Agent Runtime)**, and **Phase 5 (LLM Integration & Agent Decision Making)**:
 - **Application Framework**: Python 3.12, FastAPI (modular routing under `/api`)
 - **Database**: PostgreSQL 18.x directly (UUID PKs, check constraints, foreign keys, performance indexes)
 - **ORM & Sessions**: SQLAlchemy 2.x declarative models and scoped session dependency
-- **Database Migrations**: Alembic (`0001_initial_schema`, `0002_add_replacement_quantity`)
 - **Domain Services**:
   1. `CustomerService`: ID/email lookups, active requester validations
   2. `OrderService`: Order item retrieval, customer ownership validations
@@ -24,14 +23,21 @@ This repository contains **Phase 1 (Database & Backend Foundation)**, **Phase 2 
   8. `CancellationService`: Fulfillment state inspection, shipment conflict enforcement
   9. `CaseService`: Safe case lifecycle updates, plan tracking, sanitized agent audit event logging
   10. `VerificationService`: Independent post-resolution state verification across resolutions, orders, and inventory
-- **Agent Tool Layer (`agents/tools/`)**:
+- **Controlled Capability Layer (`agents/tools/`)**:
   - 13 typed, deterministic capabilities organized into Observation, Decision, Action, and Case Support categories.
   - Standardized `ToolResult` envelope with preserved domain error statuses.
-  - Central `TOOL_REGISTRY` with strict safety boundaries (blocks raw SQL, eval, and arbitrary execution).
-- **Synthetic Domain Data**: Deterministic seeding of 60 customers, 26 products, 4 warehouses, 220 orders, shipments, policies, and **10 explicit agentic scenarios**.
+  - Central `TOOL_REGISTRY` with strict execution boundaries (blocks raw SQL, eval, and arbitrary execution).
+- **Agent Decision Making & Runtime (`agents/planning/`, `agents/runtime/`)**:
+  - **Decision Provider Abstraction**: `DecisionProvider` base interface with `LLMDecisionProvider` (primary) and `DeterministicDecisionProvider` (fallback).
+  - **Google Gemini Integration**: Powered by official `google-genai` SDK (`gemini-1.5-flash` / `gemini-2.5-flash`) under free/free-tier API limits.
+  - **Structured Action Validation**: LLM outputs typed decisions validated against `TOOL_REGISTRY` and Pydantic schemas.
+  - **Risk & Approval Gates**: `RiskEvaluator` enforces approval requirements on high-risk actions ($100+ refunds, etc.) before execution.
+  - **Bounded Adaptation & Replanning**: `AgentReplanner` adapts on zero-inventory (searches alternative warehouses) and rechecks policy on strategy pivots.
+  - **Independent Verification**: Action success != verified success; resolution requires independent confirmation via `VerificationService`.
+  - **Loop Bounds**: `MAX_AGENT_STEPS = 20`, `MAX_SAME_TOOL_ATTEMPTS = 3`, `MAX_REPLANS = 3`.
 
 > [!NOTE]
-> **Phase Boundaries**: The Agent Runtime (LLM loop, planning, ReAct agents) and the Next.js Frontend are intentionally separate future phases (Phase 4 and Phase 5). Phase 3 establishes the controlled capability interface that the future agent will invoke.
+> **Phase Boundaries**: Phase 5 establishes real LLM decision making with strict safety bounds. Phase 6 is the upcoming interactive Next.js customer resolution dashboard (built with the `scroll-craft` skill).
 
 ---
 
@@ -211,13 +217,13 @@ Start the FastAPI application:
 
 ## Running Automated Tests
 
-Run the complete Pytest test suite (40 tests):
+Run the complete Pytest test suite (128 passing tests):
 ```powershell
 $env:PYTHONPATH="."
 .\backend\.venv\Scripts\pytest.exe backend/tests -v
 ```
 
-All 40 tests execute in < 2 seconds and verify:
+All 128 tests execute in ~25 seconds and verify:
 - System health and PostgreSQL connectivity latency
 - All 13 SQLAlchemy models and check constraints
 - Seed scenario integrity across 10 deliberate customer problems
@@ -228,3 +234,27 @@ All 40 tests execute in < 2 seconds and verify:
 - Transactional state-changing resolutions (Refunds, Replacements, Cancellations)
 - Concurrent stock reservation with pessimistic locking
 - FastAPI REST endpoints HTTP status code mappings (200, 201, 400, 403, 404, 409)
+- Phase 3 tool contracts and Pydantic parameter schemas
+- Phase 4 deterministic agent runtime loop, replanning, and verification
+- Phase 5 LLM decision making (20 tests covering investigation, actions, RiskEvaluator gates, policy denial, unknown intent, loop limits, zero inventory adaptation, multi-case isolation, secret protection, and error fallback)
+
+---
+
+## Live Google Gemini Smoke Test (Phase 5)
+
+To run a live test using Google Gemini:
+
+1. Obtain a free API key at [Google AI Studio](https://aistudio.google.com/).
+2. Add your key to `.env`:
+   ```ini
+   LLM_PROVIDER=gemini
+   LLM_MODEL=gemini-1.5-flash
+   GEMINI_API_KEY=your_actual_gemini_api_key
+   LLM_FALLBACK_TO_DETERMINISTIC=True
+   LLM_TIMEOUT_SECONDS=15
+   ```
+3. Run the live smoke test script:
+   ```powershell
+   python scripts/smoke_test_gemini.py
+   ```
+4. Observe live LLM reasoning, structured tool selection, backend execution, and verified resolution trace.

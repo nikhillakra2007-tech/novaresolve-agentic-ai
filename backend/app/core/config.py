@@ -19,6 +19,14 @@ class Settings(BaseSettings):
     DB_POOL_TIMEOUT: int = 30
     DB_POOL_RECYCLE: int = 1800
 
+    # LLM Configuration (Phase 5)
+    LLM_PROVIDER: str = "gemini"
+    LLM_MODEL: str = "gemini-1.5-flash"
+    GEMINI_API_KEY: Optional[str] = None
+    LLM_FALLBACK_TO_DETERMINISTIC: bool = True
+    LLM_TIMEOUT_SECONDS: int = 15
+    LLM_MAX_RETRIES: int = 2
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

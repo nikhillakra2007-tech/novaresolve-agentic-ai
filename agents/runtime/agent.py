@@ -11,6 +11,8 @@ from backend.app.db.models.refund import Refund
 from backend.app.db.models.replacement import Replacement
 from backend.app.db.models.case import Case
 
+from agents.planning.decision_provider import DecisionProvider
+
 logger = logging.getLogger("nova.agents.runtime")
 
 
@@ -18,11 +20,16 @@ class NovaResolveAgent:
     """Primary entrypoint for autonomous customer case resolution."""
 
     @classmethod
-    def run(cls, db: Session, case_id: uuid.UUID) -> AgentRunResult:
+    def run(
+        cls,
+        db: Session,
+        case_id: uuid.UUID,
+        decision_provider: Optional[DecisionProvider] = None,
+    ) -> AgentRunResult:
         """Executes the autonomous agent loop on the designated case."""
         logger.info(f"NovaResolveAgent received execution request for case '{case_id}'")
         state = StateManager.initialize_state(db=db, case_id=case_id)
-        return AgentLoop.run(db=db, state=state)
+        return AgentLoop.run(db=db, state=state, decision_provider=decision_provider)
 
     @classmethod
     def resume(
@@ -31,6 +38,7 @@ class NovaResolveAgent:
         case_id: uuid.UUID,
         approved: bool = True,
         reviewer_notes: Optional[str] = None,
+        decision_provider: Optional[DecisionProvider] = None,
     ) -> AgentRunResult:
         """Resumes an awaiting_approval case following human supervisor decision."""
         logger.info(f"NovaResolveAgent received resume request for case '{case_id}' (approved={approved})")
@@ -90,4 +98,4 @@ class NovaResolveAgent:
         state.requires_approval = False
         if pending_refund:
             state.resolution_status = "completed"
-        return AgentLoop.run(db=db, state=state)
+        return AgentLoop.run(db=db, state=state, decision_provider=decision_provider)

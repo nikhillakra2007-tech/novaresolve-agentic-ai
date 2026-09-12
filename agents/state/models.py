@@ -13,6 +13,7 @@ class AgentAction(BaseModel):
     parameters: Dict[str, Any] = Field(default_factory=dict, description="Typed arguments for tool execution")
     rationale: str = Field(..., description="Operational reason for choosing this action")
     expected_outcome: Optional[str] = Field(None, description="Anticipated effect of executing this tool")
+    source: str = Field("deterministic", description="Decision source: deterministic, llm, or deterministic_fallback")
 
 
 class AgentObservation(BaseModel):
