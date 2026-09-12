@@ -1,0 +1,10 @@
+{
+  "name": "novaresolve-frontend",
+  "version": "1.0.0",
+  "description": "Autonomous customer resolution control center frontend for NovaCart",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "start": "node server.mjs"
+  }
+}

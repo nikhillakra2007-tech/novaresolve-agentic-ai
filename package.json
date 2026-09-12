@@ -1,0 +1,9 @@
+{
+  "name": "novaresolve-agentic-ai",
+  "version": "1.0.0",
+  "description": "NovaResolve — Autonomous Customer Resolution Platform for NovaCart",
+  "scripts": {
+    "dev": "node frontend/server.mjs",
+    "start": "node frontend/server.mjs"
+  }
+}

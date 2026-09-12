@@ -1,0 +1,1750 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="description" content="NovaResolve: Autonomous customer resolution platform for NovaCart. Autonomous investigation, policy evaluation, adaptive replanning, and independent verification.">
+  <title>NovaResolve · Resolution workspace</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%232563eb'/%3E%3Cpath d='M11 28V12h5l8 12V12h5v16h-5l-8-12v12z' fill='white'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300..900;1,14..32,300..900&family=JetBrains+Mono:ital,wght@0,400..800;1,400..800&family=Plus+Jakarta+Sans:ital,wght@0,400..800;1,400..800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to workspace</a>
+  
+  <!-- Backdrop for Focus Spotlight Mode -->
+  <div id="focus-overlay" data-action="exit-focus"></div>
+  <div class="focus-banner" id="focus-banner">
+    <span>🎯 Focus Mode Active</span>
+    <kbd>Esc</kbd>
+    <button data-action="exit-focus">Exit</button>
+  </div>
+
+  <aside class="sidebar" id="sidebar" aria-label="Main navigation"></aside>
+  <button class="mobile-shade" aria-label="Close navigation" data-action="close-menu"></button>
+  
+  <div class="app">
+    <header class="topbar">
+      <div class="row">
+        <button class="icon-button mobile-menu" data-action="menu" aria-label="Open navigation" aria-expanded="false" id="menu-button"></button>
+        <div class="breadcrumb">
+          <span>Workspace</span>
+          <span id="breadcrumb-chevron"></span>
+          <strong id="breadcrumb-title">Overview</strong>
+        </div>
+      </div>
+      <div class="topbar-tools">
+        <label class="search">
+          <span id="search-icon"></span>
+          <input id="global-search" type="search" placeholder="Search cases, customers..." aria-label="Search cases and customers" autocomplete="off">
+          <kbd>Ctrl K</kbd>
+        </label>
+
+        <!-- Fast Persona Switcher Pill -->
+        <div class="persona-switcher-dropdown">
+          <button class="persona-chip-button" data-action="toggle-persona-popover" id="persona-chip-button" title="Switch User Persona (Alex Morgan / Priya Sharma / Rahul Sharma)" aria-label="Switch User Persona">
+            <span class="avatar-sm" id="chip-avatar">AM</span>
+            <span class="chip-name" id="chip-name">Alex Morgan</span>
+            <span class="chip-badge" id="chip-badge">Manager</span>
+            <span id="chip-chevron"></span>
+          </button>
+        </div>
+        
+        <!-- Focus Mode Toggle -->
+        <button class="icon-button" data-action="toggle-focus" id="focus-button" title="Spotlight Focus Mode (Key: F)" aria-label="Toggle Focus Mode"></button>
+        
+        <!-- Light / Dark Theme Toggle -->
+        <button class="icon-button" data-action="toggle-theme" id="theme-button" title="Toggle Light / Dark Mode" aria-label="Toggle Light and Dark Mode"></button>
+
+        <div class="separator"></div>
+        <button class="icon-button notification" data-action="notifications" id="notification-button" aria-label="Notifications" aria-expanded="false"></button>
+        
+        <!-- User Profile Avatar Button -->
+        <button class="avatar-button" data-action="profile" title="Open User Profile & Settings" aria-label="User profile and preferences">
+          <span class="avatar" id="topbar-avatar" aria-label="Current User">AM</span>
+        </button>
+      </div>
+    </header>
+    <main class="main" id="main" tabindex="-1"></main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <div id="popover-root"></div>
+  <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+
+  <script>
+  'use strict';
+  const paths = {
+    logo: 'M6 22V6h4.5l7 10.5V6H22v16h-4.5L10.5 11.5V22z',
+    grid: 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
+    cases: 'M3 7h7l2 2h9v11H3z M3 7V4h7l2 3',
+    shield: 'M12 3l8 3v6c0 5-8 9-8 9s-8-4-8-9V6z M8 12l3 3 5-6',
+    users: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M17 4a4 4 0 0 1 0 8 M22 21v-2a4 4 0 0 0-3-3.87',
+    activity: 'M3 12h4l3-8 4 16 3-8h4',
+    search: 'M21 21l-5-5 M10.5 18a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15',
+    bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9 M10 21h4',
+    right: 'M9 5l7 7-7 7',
+    down: 'M6 9l6 6 6-6',
+    arrow: 'M4 12h16 M14 6l6 6-6 6',
+    check: 'M5 12l4 4L19 6',
+    circleCheck: 'M22 11v1a10 10 0 1 1-6-9 M22 4L12 14l-3-3',
+    refresh: 'M20 7v5h-5 M4 17v-5h5 M6.1 6.1a8 8 0 0 1 13.2 3 M4.7 14.9a8 8 0 0 0 13.2 3',
+    warning: 'M12 3L2 21h20z M12 9v5 M12 17h.01',
+    clock: 'M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0 M12 6v6l4 2',
+    play: 'M7 4l14 8-14 8z',
+    pause: 'M8 5v14 M16 5v14',
+    x: 'M6 6l12 12 M6 18L18 6',
+    package: 'M12 3l9 5-9 5-9-5z M3 8v10l9 5 9-5V8 M12 13v10 M7 5l10 5',
+    file: 'M14 2H5v20h14V7z M14 2v6h5 M8 12h8 M8 16h6',
+    bolt: 'M13 2L3 14h8l-1 8 11-13h-8z',
+    layers: 'M12 3L2 8l10 5 10-5z M2 12l10 5 10-5 M2 16l10 5 10-5',
+    route: 'M5 5h10a4 4 0 0 1 0 8H9a4 4 0 0 0 0 8h10 M16 18l3 3-3 3 M5 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6',
+    menu: 'M4 6h16 M4 12h16 M4 18h16',
+    dots: 'M5 12h.01 M12 12h.01 M19 12h.01',
+    external: 'M14 3h7v7 M21 3L10 14 M10 3H3v18h18v-7',
+    inbox: 'M4 4h16l2 12v4H2v-4z M2 15h6l2 3h4l2-3h6',
+    sliders: 'M4 6h8 M16 6h4 M4 18h4 M12 18h8 M12 3v6 M8 15v6',
+    database: 'M20 5c0 2-4 3-8 3s-8-1-8-3 4-3 8-3 8 1 8 3z M4 5v14c0 2 4 3 8 3s8-1 8-3V5 M4 12c0 2 4 3 8 3s8-1 8-3',
+    lock: 'M5 10h14v11H5z M8 10V6a4 4 0 0 1 8 0v4',
+    sun: 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z',
+    moon: 'M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z',
+    focus: 'M12 2a10 10 0 1010 10A10 10 0 0012 2zm0 15a5 5 0 115-5 5 5 0 01-5 5zm0-3a2 2 0 102-2 2 2 0 00-2 2z'
+  };
+
+  const icon = (name, cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name] || paths.file}"/></svg>`;
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const initials = name => name.split(' ').map(s => s[0]).slice(0, 2).join('');
+  const money = n => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
+  const now = Date.now();
+  const terminal = ['Resolved', 'Escalated', 'Failed'];
+
+  // User Personas & Governance Config
+  const personas = {
+    manager: {
+      name: 'Alex Morgan',
+      initials: 'AM',
+      role: 'Resolution Operations Lead',
+      department: 'Autonomous Resolution Operations',
+      email: 'alex.morgan@novacart.internal',
+      tone: '',
+      level: 'Lead Admin (Level 3)',
+      permissions: 'Autonomous Policy Tuning · High-Risk Signoff · Threshold Override',
+      greeting: 'NOVACART · RESOLUTION OPERATIONS',
+      dashboardTitle: 'Alex Morgan · Operations Workspace',
+      badgeText: 'Lead Operations Manager',
+      chipBadge: 'Manager',
+      defaultCase: 'NR-1024'
+    },
+    specialist: {
+      name: 'Priya Sharma',
+      initials: 'PS',
+      role: 'Tier-2 Dispute Specialist',
+      department: 'Fraud & Escalations Desk',
+      email: 'priya.sharma@novacart.internal',
+      tone: 'mauve',
+      level: 'Specialist (Level 2)',
+      permissions: 'Evidence Inspection · Logistics Forensics · Exception Approval',
+      greeting: 'NOVACART · FRAUD & DISPUTE DESK',
+      dashboardTitle: 'Priya Sharma · Dispute Specialist Desk',
+      badgeText: 'Dispute Specialist',
+      chipBadge: 'Specialist',
+      defaultCase: 'NR-1025'
+    },
+    customer: {
+      name: 'Rahul Sharma',
+      initials: 'RS',
+      role: 'Customer Portal View',
+      department: 'Customer Account #NC-48391',
+      email: 'rahul.sharma@example.com',
+      tone: 'sand',
+      level: 'End User Observer',
+      permissions: 'Live Replacement Observability · Evidence Transparency',
+      greeting: 'NOVACART · CUSTOMER SELF-SERVICE PORTAL',
+      dashboardTitle: 'Rahul Sharma · Live Resolution Tracking',
+      badgeText: 'Customer Self-Service',
+      chipBadge: 'Customer',
+      defaultCase: 'NR-1024'
+    }
+  };
+
+  let activePersona = 'manager';
+  let autonomousThreshold = 10000;
+  let autoRerouteEnabled = true;
+  let focusMode = false;
+  let currentTheme = localStorage.getItem('novaresolve-theme') || 'light';
+
+  document.documentElement.setAttribute('data-theme', currentTheme);
+
+  const statuses = {
+    Investigating: ['blue', 'search'],
+    Planning: ['blue', 'layers'],
+    'Awaiting Approval': ['amber', 'shield'],
+    Executing: ['blue', 'bolt'],
+    Replanning: ['amber', 'refresh'],
+    Verifying: ['blue', 'shield'],
+    Resolved: ['green', 'circleCheck'],
+    Escalated: ['red', 'external'],
+    Failed: ['red', 'x']
+  };
+
+  const badge = status => {
+    const [color, symbol] = statuses[status] || ['', 'clock'];
+    return `<span class="badge ${color}">${icon(symbol)}${esc(status)}</span>`;
+  };
+  const riskBadge = risk => `<span class="risk ${risk.toLowerCase()}"><span class="dot"></span>${esc(risk)}</span>`;
+  const avatar = (name, tone = '') => `<span class="avatar ${tone}" aria-hidden="true">${initials(name)}</span>`;
+
+  function createDemoCases() {
+    return [
+      { id: 'NR-1024', customer: 'Rahul Sharma', email: 'rahul.sharma@example.com', issue: 'Damaged product', goal: 'Damaged product · replacement requested', status: 'Replanning', risk: 'Low', resolution: 'Replacement', amount: 3499, order: 'NC-48391', product: 'NovaSound wireless headphones', warehouse: 'Delhi', alternate: 'Jaipur', stock: 4, updated: now - 32000, tone: '', reason: 'Original fulfillment warehouse has no available inventory.', recommendation: 'Route the replacement through an alternative warehouse.', verified: false, stage: 5 },
+      { id: 'NR-1025', customer: 'Priya Mehta', email: 'priya.mehta@example.com', issue: 'Refund requested', goal: 'Return received · refund requested', status: 'Awaiting Approval', risk: 'High', resolution: 'Refund', amount: 12450, order: 'NC-48386', product: 'NovaView 27-inch monitor', updated: now - 120000, tone: 'mauve', reason: `Refund amount exceeds the ${money(autonomousThreshold)} autonomous approval threshold.`, recommendation: 'Approve the full refund. The returned item has been received and inspected.', verified: false },
+      { id: 'NR-1035', customer: 'Diya Nair', email: 'diya.nair@example.com', issue: 'Refund requested', goal: 'Return received · refund requested', status: 'Awaiting Approval', risk: 'High', resolution: 'Refund', amount: 18990, order: 'NC-48355', product: 'NovaClean robot vacuum', updated: now - 420000, tone: '', reason: `Refund amount exceeds the ${money(autonomousThreshold)} autonomous approval threshold.`, recommendation: 'Approve the refund. Return eligibility and receipt have been confirmed.', verified: false },
+      { id: 'NR-1026', customer: 'Aman Verma', email: 'aman.verma@example.com', issue: 'Order cancellation', goal: 'Cancel order before dispatch', status: 'Investigating', risk: 'Low', resolution: 'Cancellation', amount: 2199, order: 'NC-48394', product: 'NovaCharge charging station', updated: now - 180000, tone: 'blue', reason: 'Checking the shipment state before confirming cancellation.', recommendation: 'Inspect dispatch status and cancellation policy.', verified: false },
+      { id: 'NR-1027', customer: 'Sneha Patel', email: 'sneha.patel@example.com', issue: 'Missing item', goal: 'Missing item · replacement requested', status: 'Executing', risk: 'Low', resolution: 'Replacement', amount: 1499, order: 'NC-48374', product: 'NovaFit activity band', warehouse: 'Mumbai', updated: now - 300000, tone: 'sand', reason: 'Replacement approved. Reserving one unit at the Mumbai warehouse.', recommendation: 'Create the replacement and verify the reservation.', verified: false },
+      { id: 'NR-1028', customer: 'Arjun Reddy', email: 'arjun.reddy@example.com', issue: 'Delivery dispute', goal: 'Delivered parcel not received', status: 'Escalated', risk: 'Medium', resolution: 'Manual review', amount: 7999, order: 'NC-48361', product: 'NovaTab tablet', updated: now - 540000, tone: 'blue', reason: 'Carrier delivery evidence conflicts with the customer report.', recommendation: 'A resolution specialist must review proof of delivery.', verified: false },
+      { id: 'NR-1029', customer: 'Ananya Iyer', email: 'ananya.iyer@example.com', issue: 'Refund requested', goal: 'Return accepted · refund completed', status: 'Resolved', risk: 'Low', resolution: 'Refund', amount: 2499, order: 'NC-48343', product: 'NovaKeys keyboard', updated: now - 720000, tone: 'mauve', reason: 'Refund completed and verified against the payment record.', recommendation: 'No further action required.', verified: true },
+      { id: 'NR-1030', customer: 'Vikram Singh', email: 'vikram.singh@example.com', issue: 'Wrong item received', goal: 'Correct product replacement completed', status: 'Resolved', risk: 'Low', resolution: 'Replacement', amount: 3299, order: 'NC-48334', product: 'NovaSound speaker', updated: now - 1080000, tone: 'sand', reason: 'Replacement and inventory reservation verified.', recommendation: 'No further action required.', verified: true },
+      { id: 'NR-1031', customer: 'Ishita Rao', email: 'ishita.rao@example.com', issue: 'Order cancellation', goal: 'Order cancellation completed', status: 'Resolved', risk: 'Low', resolution: 'Cancellation', amount: 1899, order: 'NC-48322', product: 'NovaLight desk lamp', updated: now - 1620000, tone: '', reason: 'Order cancellation confirmed. Payment reversal verified.', recommendation: 'No further action required.', verified: true },
+      { id: 'NR-1032', customer: 'Rohan Kapoor', email: 'rohan.kapoor@example.com', issue: 'Damaged product', goal: 'Damaged product · refund requested', status: 'Planning', risk: 'Medium', resolution: 'Refund', amount: 6799, order: 'NC-48401', product: 'NovaHome air purifier', updated: now - 240000, tone: 'blue', reason: 'Evidence collected. Comparing eligible resolution options.', recommendation: 'Evaluate the refund against the return policy.', verified: false },
+      { id: 'NR-1034', customer: 'Karan Shah', email: 'karan.shah@example.com', issue: 'Missing accessory', goal: 'Missing accessory · replacement created', status: 'Verifying', risk: 'Low', resolution: 'Replacement', amount: 799, order: 'NC-48389', product: 'NovaCharge USB-C adapter', warehouse: 'Bengaluru', updated: now - 60000, tone: 'sand', reason: 'Replacement created. Checking the reserved quantity and fulfillment record.', recommendation: 'Resolve only after the observed state matches the expected state.', verified: false }
+    ];
+  }
+
+  let cases = createDemoCases();
+  const state = { view: 'overview', selected: 'NR-1024', tab: 'trace', filter: 'all', risk: 'all', query: '', limit: 6, playing: false, expanded: new Set(), error: false, loading: false, popover: null };
+  let replayTimer, toastTimer, loadTimer, burstTimer;
+  const approvalTimers = new Map();
+  let audit = [];
+  let lastDialogFocus;
+  let previousView, previousTab, previousStage;
+
+  const caseById = id => cases.find(c => c.id === id);
+  const selected = () => caseById(state.selected) || cases[0];
+  const pending = () => cases.filter(c => c.status === 'Awaiting Approval');
+  const ago = t => {
+    const seconds = Math.max(0, Math.floor((Date.now() - t) / 1000));
+    return seconds < 60 ? 'Just now' : seconds < 3600 ? `${Math.floor(seconds / 60)} min ago` : `${Math.floor(seconds / 3600)} hr ago`;
+  };
+  const pageNames = { overview: 'Overview', cases: 'Cases', approvals: 'Approvals', customers: 'Customers', activity: 'Activity' };
+
+  function renderSidebar() {
+    const p = personas[activePersona];
+    const nav = [
+      ['overview', 'grid', 'Overview'],
+      ['cases', 'cases', 'Cases'],
+      ['approvals', 'shield', 'Approvals'],
+      ['customers', 'users', 'Customers'],
+      ['activity', 'activity', 'Activity']
+    ];
+    const sidebar = document.getElementById('sidebar');
+    
+    sidebar.innerHTML = `
+      <a href="#overview" class="brand" aria-label="NovaResolve overview">
+        <span class="brand-mark">${icon('logo')}</span>
+        <div class="brand-text">
+          <span class="brand-name">NovaResolve</span>
+          <span class="brand-description">Resolution, reimagined.</span>
+        </div>
+      </a>
+      <div class="workspace">
+        <span class="workspace-logo">${icon('package')}</span>
+        <div>
+          <strong>NovaCart</strong>
+          <small>Demo workspace</small>
+        </div>
+      </div>
+      <div class="nav-label">WORKSPACE</div>
+      <nav class="nav">
+        <span class="nav-marker" aria-hidden="true"></span>
+        ${nav.map(([id, symbol, label]) => `
+          <a href="#${id}" data-nav="${id}">
+            ${icon(symbol)}
+            <span>${label}</span>
+            ${id === 'approvals' ? '<span class="count" id="approval-count"></span>' : ''}
+          </a>
+        `).join('')}
+      </nav>
+      <div class="sidebar-bottom">
+        <button class="system-link" data-action="system">
+          <span class="dot"></span>
+          <span>System status</span>
+          ${icon('right')}
+        </button>
+        <div class="sidebar-session">
+          ${icon('database')}
+          <span>Simulated workspace</span>
+        </div>
+        <button class="profile" data-action="profile" aria-label="Open workspace preferences">
+          ${avatar(p.name, p.tone)}
+          <div>
+            <strong>${esc(p.name)}</strong>
+            <small>${esc(p.role)}</small>
+          </div>
+          ${icon('sliders')}
+        </button>
+      </div>
+    `;
+
+    sidebar.querySelectorAll('[data-nav]').forEach(link => {
+      const active = link.dataset.nav === state.view;
+      link.classList.toggle('active', active);
+      if (active) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+    });
+
+    const activeIndex = nav.findIndex(([id]) => id === state.view);
+    const marker = sidebar.querySelector('.nav-marker');
+    if (marker && activeIndex >= 0) {
+      marker.style.transform = `translateY(${activeIndex * 46}px)`;
+    }
+
+    const count = document.getElementById('approval-count');
+    if (count) {
+      count.textContent = pending().length;
+      count.hidden = !pending().length;
+    }
+    const notifBtn = document.getElementById('notification-button');
+    if (notifBtn) {
+      notifBtn.innerHTML = icon('bell') + (pending().length ? '<span class="unread"></span>' : '');
+      notifBtn.setAttribute('aria-label', `Notifications, ${pending().length} approvals require attention`);
+    }
+
+    // Update Topbar Icons & Profile & Quick Persona Switcher
+    const themeBtn = document.getElementById('theme-button');
+    if (themeBtn) {
+      themeBtn.innerHTML = icon(currentTheme === 'dark' ? 'sun' : 'moon');
+    }
+    const focusBtn = document.getElementById('focus-button');
+    if (focusBtn) {
+      focusBtn.innerHTML = icon('focus');
+      focusBtn.classList.toggle('active', focusMode);
+    }
+    const topAvatar = document.getElementById('topbar-avatar');
+    if (topAvatar) {
+      topAvatar.textContent = p.initials;
+      topAvatar.className = `avatar ${p.tone}`;
+    }
+    const chipAvatar = document.getElementById('chip-avatar');
+    if (chipAvatar) {
+      chipAvatar.textContent = p.initials;
+      chipAvatar.className = `avatar-sm ${p.tone}`;
+    }
+    const chipName = document.getElementById('chip-name');
+    if (chipName) chipName.textContent = p.name;
+    const chipBadge = document.getElementById('chip-badge');
+    if (chipBadge) chipBadge.textContent = p.chipBadge;
+    const chipChevron = document.getElementById('chip-chevron');
+    if (chipChevron) chipChevron.innerHTML = icon('down');
+  }
+
+  function metrics() {
+    if (activePersona === 'specialist') {
+      const escalatedCount = cases.filter(c => c.status === 'Escalated').length;
+      const highRiskCount = cases.filter(c => c.risk === 'High' && c.status === 'Awaiting Approval').length;
+      const investigatingCount = cases.filter(c => ['Investigating', 'Replanning'].includes(c.status)).length;
+      const today = new Date().toDateString();
+      const resolvedCount = cases.filter(c => c.status === 'Resolved' && new Date(c.updated).toDateString() === today).length;
+      const data = [
+        ['Assigned Escalations', escalatedCount, 'external', 'High-priority dispute', 'Escalated', 'primary'],
+        ['High-Risk Approvals', highRiskCount, 'shield', 'Exceeds ₹10k threshold', 'Awaiting Approval', 'amber-text'],
+        ['Evidence Forensics', investigatingCount, 'search', 'Under investigation', 'active', ''],
+        ['Policy Overrides', 1, 'sliders', 'Discretionary queue', 'all', ''],
+        ['Resolved Disputes', resolvedCount, 'circleCheck', 'Verified outcomes', 'Resolved', 'green-text']
+      ];
+      return `
+        <section class="metrics" aria-label="Specialist resolution status">
+          ${data.map(([label, value, symbol, detail, filter, cls]) => `
+            <button class="metric ${cls === 'primary' ? 'primary' : ''}" data-action="metric" data-filter="${filter}" aria-label="${label}: ${value}. View cases">
+              <span class="metric-label">
+                <span>${label}</span>
+                <span class="metric-icon">${icon(symbol)}</span>
+              </span>
+              <strong class="number">${String(value)}</strong>
+              <p class="${cls}">${cls === 'green-text' ? icon('check') : ''}${detail}</p>
+            </button>
+          `).join('')}
+        </section>
+      `;
+    }
+
+    if (activePersona === 'customer') {
+      const data = [
+        ['Active Order', '1', 'package', 'Order #NC-48391', 'all', 'primary'],
+        ['Resolution Type', 'Replacement', 'refresh', '7-day policy approved', 'all', ''],
+        ['Fulfillment Route', 'Jaipur Hub', 'route', 'Rerouted from Delhi', 'all', 'amber-text'],
+        ['Estimated Arrival', 'Tomorrow 2 PM', 'clock', 'Express delivery', 'all', 'green-text'],
+        ['Customer Fee', '₹0.00', 'circleCheck', '100% covered by NovaCart', 'all', 'green-text']
+      ];
+      return `
+        <section class="metrics" aria-label="Customer order status">
+          ${data.map(([label, value, symbol, detail, filter, cls]) => `
+            <button class="metric ${cls === 'primary' ? 'primary' : ''}" data-action="metric" data-filter="${filter}" aria-label="${label}: ${value}">
+              <span class="metric-label">
+                <span>${label}</span>
+                <span class="metric-icon">${icon(symbol)}</span>
+              </span>
+              <strong class="number">${String(value)}</strong>
+              <p class="${cls}">${cls === 'green-text' ? icon('check') : ''}${detail}</p>
+            </button>
+          `).join('')}
+        </section>
+      `;
+    }
+
+    // Default: Alex Morgan (Resolution Operations Lead)
+    const active = cases.filter(c => !terminal.includes(c.status)).length;
+    const running = cases.filter(c => ['Investigating', 'Planning', 'Executing', 'Replanning', 'Verifying'].includes(c.status)).length;
+    const today = new Date().toDateString();
+    const data = [
+      ['Active cases', active, 'cases', 'In your workspace', 'active', 'primary'],
+      ['Agent resolving', running, 'bolt', 'Working on a solution', 'resolving', ''],
+      ['Awaiting approval', pending().length, 'shield', 'Ready for your review', 'Awaiting Approval', 'amber-text'],
+      ['Escalated', cases.filter(c => c.status === 'Escalated').length, 'external', 'Specialist attention', 'Escalated', 'red-text'],
+      ['Resolved today', cases.filter(c => c.status === 'Resolved' && new Date(c.updated).toDateString() === today).length, 'circleCheck', 'Verified outcomes', 'Resolved', 'green-text']
+    ];
+    return `
+      <section class="metrics" aria-label="Resolution status">
+        ${data.map(([label, value, symbol, detail, filter, cls]) => `
+          <button class="metric ${cls === 'primary' ? 'primary' : ''}" data-action="metric" data-filter="${filter}" aria-label="${label}: ${value}. View cases">
+            <span class="metric-label">
+              <span>${label}</span>
+              <span class="metric-icon">${icon(symbol)}</span>
+            </span>
+            <strong class="number">${String(value)}</strong>
+            <p class="${cls}">${cls === 'green-text' ? icon('check') : ''}${detail}</p>
+          </button>
+        `).join('')}
+      </section>
+    `;
+  }
+
+  function mainHeading(title, subtitle, actions = '') {
+    const p = personas[activePersona];
+    return `
+      <div class="page-heading">
+        <div>
+          ${state.view === 'overview' ? `<div class="greeting">${esc(p.greeting)}</div>` : ''}
+          <h1>
+            <span>${title}</span>
+            ${state.view === 'overview' ? `<span class="persona-role-pill ${activePersona}"><span class="dot"></span>${esc(p.badgeText)}</span>` : ''}
+          </h1>
+          <p>${subtitle}</p>
+        </div>
+        ${actions ? `<div class="heading-actions">${actions}</div>` : ''}
+      </div>
+    `;
+  }
+
+  const replayControl = () => `
+    <button class="button primary" data-action="replay">
+      ${icon(state.playing ? 'pause' : 'play')}
+      <span>${state.playing ? 'Pause replay' : 'Replay demo'}</span>
+    </button>
+    <span class="demo-tag"><span class="dot"></span>Demo data</span>
+  `;
+
+  function customerSidePanel() {
+    return `
+      <section class="panel customer-side-card" aria-label="Customer Order Protection">
+        <div class="panel-header">
+          <div>
+            <span class="badge green">${icon('circleCheck')}Autonomous Guarantee</span>
+            <h2 style="font-size: 15px; margin-top: 6px;">Protected Order #NC-48391</h2>
+          </div>
+        </div>
+        <div style="padding: 16px; font-size: 13px; line-height: 1.6; color: var(--ink);">
+          <div style="display: flex; gap: 12px; margin-bottom: 14px; background: var(--surface-subtle); padding: 12px; border-radius: 10px; border: 1px solid var(--line);">
+            ${icon('package', 'text-accent')}
+            <div>
+              <strong style="display: block; font-family: var(--font-display); color: var(--ink-heading);">NovaSound Wireless Headphones</strong>
+              <small style="color: var(--muted); font-family: var(--font-mono);">₹3,499 · Delivered Sept 10</small>
+            </div>
+          </div>
+          <p style="margin: 0 0 10px; color: var(--muted);">
+            Your replacement request was approved automatically by NovaCart Policy. Because our Delhi warehouse was out of stock, our agent dynamically routed your shipment from Jaipur with zero delay.
+          </p>
+          <div style="border-top: 1px solid var(--line); padding-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div>
+              <span style="font-size: 11px; color: var(--muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">Dispatch Hub</span>
+              <strong style="display: block; font-family: var(--font-display); color: var(--ink-heading);">Jaipur Fulfillment</strong>
+            </div>
+            <div>
+              <span style="font-size: 11px; color: var(--muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">Estimated Arrival</span>
+              <strong style="display: block; font-family: var(--font-display); color: var(--green);">Tomorrow, 2 PM</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel" style="padding: 16px;" aria-label="Transparency">
+        <div style="display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12.5px;">
+          ${icon('shield', 'text-accent')}
+          <span><strong>100% Policy Transparency</strong> · Every agent calculation is verified against NovaCart standards.</span>
+        </div>
+      </section>
+    `;
+  }
+
+  function overview() {
+    const p = personas[activePersona];
+    const activeCount = cases.filter(c => !terminal.includes(c.status)).length;
+    let subtitle = '';
+    if (activePersona === 'manager') {
+      subtitle = `${activeCount} cases in motion. ${pending().length} decisions need your attention.`;
+    } else if (activePersona === 'specialist') {
+      subtitle = `Tier-2 Escalations Queue · 3 priority investigations assigned to your desk.`;
+    } else {
+      subtitle = `Order #NC-48391 · NovaSound wireless headphones · Live autonomous replacement tracking.`;
+    }
+
+    return `
+      ${mainHeading(p.dashboardTitle, subtitle, replayControl())}
+      ${metrics()}
+      <div class="section-label">
+        <h2>${activePersona === 'customer' ? 'Your live resolution tracking' : terminal.includes(selected().status) ? 'Resolution detail' : 'The agent at work'}</h2>
+        <span class="right-label">${icon('activity')}${activePersona === 'customer' ? 'Real-time agent routing & verification' : 'Follow the thinking. See the outcome.'}</span>
+      </div>
+      <div class="work-grid">
+        <div id="case-panel" class="${focusMode ? 'spotlight-focus-target' : ''}">${casePanel()}</div>
+        <aside class="side-stack" aria-label="Human oversight">
+          ${activePersona === 'customer' ? customerSidePanel() : `
+            ${approvalPanel(pending()[0])}
+            ${contextPanel()}
+          `}
+          <div class="trust-note">
+            ${icon('shield')}
+            <span>${activePersona === 'customer' ? 'NovaCart Autonomous Resolution Guarantee: transparent evidence and zero customer fees.' : 'Actions are checked against policy and risk. A case is resolved only after verification.'}</span>
+          </div>
+        </aside>
+      </div>
+      ${activePersona === 'customer' ? '' : `<section class="queue-section" aria-label="Case queue">${queue(false)}</section>`}
+    `;
+  }
+
+  function replaySteps(c) {
+    const entries = [
+      ['Customer identified', 'Customer and account information retrieved', 'get_customer', 'Account matched to Rahul Sharma. Customer identity confirmed.', '0.2s'],
+      ['Order inspected', `Order #${c.order} · ${c.product}`, 'get_order', 'Delivered 2 days ago. Quantity: 1. Customer reported damage on arrival.', '0.4s'],
+      ['Policy evaluated', 'Replacement eligible within the 7-day window', 'evaluate_policy', 'Damaged-on-arrival policy applies. Replacement permitted. Low risk.', '0.3s'],
+      ['Inventory checked', 'Delhi warehouse · 0 units available', 'check_inventory', 'Requested SKU: NS-WH-01. Delhi available quantity: 0. Reservation not attempted.', '0.6s'],
+      ['Constraint detected', 'Original warehouse cannot fulfill this replacement', 'observe_constraint', 'Inventory = 0. Original replacement route is blocked; the customer goal is retained.', '0.1s'],
+      ['Agent replanning', 'Finding another way to fulfill the customer’s goal', 'find_alternative_inventory', 'Searching eligible warehouses for the same SKU. Preserve quantity, policy eligibility, and risk limits.', '1.2s'],
+      ['Alternative found', 'Jaipur warehouse · 4 units available', 'check_alternative_inventory', 'Jaipur has 4 units of NS-WH-01. One unit can be reserved. Resolution plan updated.', '0.5s'],
+      ['Replacement executed', '1 unit reserved · fulfillment routed to Jaipur', 'create_replacement', 'Replacement RP-2084 created for order NC-48391. Warehouse: Jaipur. Quantity: 1.', '0.8s'],
+      ['Verification successful', 'Replacement and inventory reservation confirmed', 'verify_resolution', 'Expected: replacement created, quantity 1 reserved. Observed: RP-2084 created, quantity 1 reserved. Match confirmed.', '0.3s']
+    ];
+    return entries.map(([title, detail, tool, evidence, duration], i) => ({
+      title,
+      detail,
+      tool,
+      evidence,
+      duration,
+      state: i > c.stage ? 'waiting' : i === c.stage && c.stage < 9 ? (i === 4 ? 'warning' : 'active') : i === 4 ? 'warning' : i === 8 ? 'verified' : 'completed'
+    }));
+  }
+
+  function caseSteps(c) {
+    if (c.id === 'NR-1024') return replaySteps(c);
+    if (c.decision === 'reject') return [
+      { title: 'Customer and order identified', detail: `${c.customer} · Order #${c.order}`, tool: 'get_order', evidence: c.product, state: 'completed', duration: '0.4s' },
+      { title: 'Policy and risk evaluated', detail: 'Refund exceeds the autonomous approval threshold', tool: 'evaluate_policy', evidence: c.reason, state: 'completed', duration: '0.3s' },
+      { title: 'Human approval requested', detail: `Proposed refund: ${money(c.amount)}`, tool: 'request_approval', evidence: c.recommendation, state: 'completed', duration: 'Reviewed' },
+      { title: 'Approval rejected', detail: 'A resolution specialist must review this case', tool: 'approval_decision', evidence: c.decisionNote || 'Rejected by the resolution manager.', state: 'failed', duration: 'Just now' }
+    ];
+    const plan = [
+      { title: 'Customer identified', detail: `${c.customer} · Account matched`, tool: 'get_customer', evidence: `Customer account located for ${c.email}.`, duration: '0.2s' },
+      { title: 'Order inspected', detail: `Order #${c.order} · ${c.product}`, tool: 'get_order', evidence: `Order value: ${money(c.amount)}. Requested resolution: ${c.resolution}.`, duration: '0.4s' },
+      { title: 'Policy and risk evaluated', detail: `${c.risk} risk · ${c.resolution} eligibility reviewed`, tool: 'evaluate_policy', evidence: c.status === 'Escalated' ? c.reason : `Resolution request checked against the applicable ${c.resolution.toLowerCase()} policy. ${c.risk} risk.`, duration: '0.3s' },
+      { title: c.decision === 'approve' ? 'Human approval recorded' : c.status === 'Awaiting Approval' ? 'Human approval required' : 'Resolution planned', detail: c.decision === 'approve' ? `Approved by ${personas[activePersona].name}${c.decisionNote ? ' · ' + c.decisionNote : ''}` : c.status === 'Awaiting Approval' ? c.reason : c.recommendation, tool: c.decision || c.status === 'Awaiting Approval' ? 'approval_decision' : 'plan_resolution', evidence: c.recommendation, duration: c.decision === 'approve' ? 'Approved' : '0.3s' },
+      { title: `${c.resolution} executed`, detail: c.resolution === 'Refund' ? `Refund of ${money(c.amount)} submitted` : c.resolution === 'Replacement' ? 'Replacement created · 1 unit reserved' : 'Cancellation submitted', tool: 'execute_resolution', evidence: `${c.resolution} action recorded for order ${c.order}. Verification is required before resolution.`, duration: '0.6s' },
+      { title: 'Resolution verification', detail: c.verified ? c.reason : 'Compare the observed result with the expected outcome', tool: 'verify_resolution', evidence: c.verified ? 'Expected and observed states match. The outcome is verified.' : c.reason, duration: '0.3s' }
+    ];
+    let step = { Investigating: 1, Planning: 3, 'Awaiting Approval': 3, Executing: 4, Verifying: 5, Resolved: 6, Escalated: 2, Failed: 5 }[c.status] ?? 0;
+    return plan.map((s, i) => ({
+      ...s,
+      state: i > step ? 'waiting' : i === step ? (c.status === 'Escalated' || c.status === 'Failed' ? 'failed' : c.status === 'Awaiting Approval' ? 'warning' : 'active') : c.verified && i === 5 ? 'verified' : 'completed'
+    }));
+  }
+
+  function agentFocus(c) {
+    const moving = (state.playing && c.id === 'NR-1024') || (c.decision === 'approve' && ['Executing', 'Verifying'].includes(c.status));
+    const activeLabel = moving ? 'Agent working now' : c.verified ? 'Verified outcome' : terminal.includes(c.status) ? 'Review the outcome' : 'CURRENT AGENT STATE';
+    const color = c.verified ? 'green' : c.status === 'Awaiting Approval' ? 'amber' : ['Escalated', 'Failed'].includes(c.status) ? 'red' : 'blue';
+    const titles = {
+      Investigating: 'Getting the full picture.',
+      Planning: 'Choosing the right next step.',
+      'Awaiting Approval': 'A decision only you can make.',
+      Executing: 'Putting the plan into action.',
+      Replanning: 'A new route. The same promise.',
+      Verifying: 'Making sure it actually worked.',
+      Resolved: 'Resolved. And double-checked.',
+      Escalated: 'Over to a resolution specialist.',
+      Failed: 'This outcome needs a closer look.'
+    };
+    let route = '';
+    if (c.id === 'NR-1024' && c.stage >= 4) {
+      const found = c.stage >= 6;
+      route = `
+        <div class="route-map" aria-label="Fulfillment route">
+          <div class="route-node blocked">
+            ${icon('package')}
+            <div>
+              <strong>Delhi</strong>
+              <small>No inventory</small>
+            </div>
+          </div>
+          <span class="route-connector ${moving ? 'moving' : ''}" aria-hidden="true"></span>
+          <div class="route-node ${found ? 'found' : ''}">
+            ${icon(found ? 'circleCheck' : 'search')}
+            <div>
+              <strong>${found ? 'Jaipur' : 'Alternative route'}</strong>
+              <small>${c.stage >= 7 ? '1 unit reserved' : found ? '4 units available' : 'Searching inventory'}</small>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    return `
+      <section class="agent-focus ${color}" aria-label="Current agent decision">
+        <div class="focus-label">
+          <span class="dot"></span>
+          <span>${activeLabel}</span>
+          ${moving ? '<span class="focus-animation" aria-label="Agent is working"><i></i><i></i><i></i></span>' : ''}
+        </div>
+        <h3 class="focus-title">${titles[c.status] || 'Autonomous resolution'}</h3>
+        <p class="focus-copy">${esc(c.reason)}</p>
+        ${route}
+      </section>
+    `;
+  }
+
+  function casePanel() {
+    const c = selected();
+    return `
+      <section class="panel" aria-label="Case ${c.id}">
+        <div class="panel-header">
+          <div>
+            <div class="case-topline">
+              <span class="case-id">CASE ${c.id}</span>
+              ${badge(c.status)}
+            </div>
+            <h2 class="case-title">${esc(c.goal)}</h2>
+          </div>
+          <button class="icon-button" data-action="case-info" aria-label="View case information">${icon('dots')}</button>
+        </div>
+        <div class="case-goal">
+          ${avatar(c.customer, c.tone)}
+          <div>
+            <strong>${esc(c.customer)}</strong>
+            <p>${esc(c.product)}</p>
+          </div>
+          <div class="goal-meta">
+            <span>Order reference</span>
+            <strong>#${c.order}</strong>
+          </div>
+        </div>
+        ${agentFocus(c)}
+        <div class="panel-tabs" role="tablist" aria-label="Case information">
+          ${[
+            ['trace', 'activity', 'Execution trace'],
+            ['evidence', 'file', 'Evidence'],
+            ['verification', 'shield', 'Verification']
+          ].map(([tab, symbol, label]) => `
+            <button id="tab-${tab}" role="tab" aria-selected="${state.tab === tab}" aria-controls="case-tab-panel" tabindex="${state.tab === tab ? '0' : '-1'}" class="${state.tab === tab ? 'active' : ''}" data-action="tab" data-tab="${tab}">
+              ${icon(symbol)}
+              <span>${label}</span>
+            </button>
+          `).join('')}
+        </div>
+        <div id="case-tab-panel" role="tabpanel" aria-labelledby="tab-${state.tab}" tabindex="0">
+          ${state.tab === 'trace' ? trace(c) : state.tab === 'evidence' ? evidence(c) : verification(c)}
+        </div>
+      </section>
+    `;
+  }
+
+  function trace(c) {
+    const steps = caseSteps(c);
+    const completed = steps.filter(s => ['completed', 'verified'].includes(s.state) || (s.state === 'warning' && c.id === 'NR-1024' && c.stage > 4)).length;
+    return `
+      <div class="trace-content">
+        <div class="trace-intro">
+          <div>
+            <strong>Step-by-step execution</strong>
+            <span class="step-count">${completed} of ${steps.length} steps complete</span>
+          </div>
+          <button class="text-button" data-action="expand-all">${state.expanded.size ? 'Collapse' : 'Expand'} details</button>
+        </div>
+        <ol class="timeline">
+          ${steps.map((s, i) => {
+            const active = s.state === 'active';
+            const waiting = s.state === 'waiting';
+            const open = state.expanded.has(`${c.id}-${i}`);
+            const symbol = s.state === 'warning' ? 'warning' : s.state === 'failed' ? 'x' : waiting ? 'clock' : active ? (c.id === 'NR-1024' && i === 5 ? 'refresh' : 'activity') : s.state === 'verified' ? 'circleCheck' : 'check';
+            return `
+              <li class="step ${s.state}">
+                <span class="step-icon">${icon(symbol, state.playing && active ? 'spinning' : '')}</span>
+                <button class="step-head" data-action="step" data-step="${i}" aria-expanded="${open}" aria-controls="step-detail-${i}" ${waiting ? 'disabled' : ''}>
+                  <span class="sr-only">${s.state}. </span>
+                  <span class="step-name">${esc(s.title)}</span>
+                  ${active ? '<span class="badge blue">In progress</span>' : ''}
+                  <span class="step-time">${waiting ? 'Queued' : active ? 'Now' : s.duration}</span>
+                  ${!waiting ? icon('down', 'step-chevron') : ''}
+                </button>
+                ${!waiting && !active ? `<p class="step-brief">${esc(s.detail)}</p>` : ''}
+                ${active ? `
+                  <div class="step-body">
+                    <div class="row">
+                      ${icon(c.id === 'NR-1024' && i === 5 ? 'route' : 'activity')}
+                      <span>${c.id === 'NR-1024' && i === 5 ? 'ADAPTING THE PLAN' : 'AGENT IN PROGRESS'}</span>
+                    </div>
+                    <p>${esc(c.id === 'NR-1024' && i === 5 ? 'Delhi has no available inventory. The agent is searching other warehouses for an eligible replacement.' : s.detail)}</p>
+                    <div class="agent-note">
+                      ${icon('bolt')}
+                      <span>${c.id === 'NR-1024' && i === 5 ? 'Same customer goal. A new fulfillment route.' : esc(c.reason)}</span>
+                    </div>
+                  </div>
+                ` : ''}
+                <div id="step-detail-${i}" ${open && !waiting ? '' : 'hidden'} class="step-evidence">
+                  <code>${esc(s.tool)}</code><br>
+                  ${esc(s.evidence)}
+                </div>
+              </li>
+            `;
+          }).join('')}
+        </ol>
+      </div>
+      <div class="trace-footer">
+        <span class="row">
+          ${icon('shield')}
+          <span>${c.verified ? 'Outcome verified. Case resolved.' : 'Every step has an evidence trail.'}</span>
+        </span>
+        <div class="row">
+          <div class="progress" aria-hidden="true">
+            ${steps.map(s => `<span class="${['completed', 'verified'].includes(s.state) ? 'done' : s.state === 'active' ? 'current' : ''}"></span>`).join('')}
+          </div>
+          <span>${c.verified ? 'Verified' : c.status}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  function evidence(c) {
+    const steps = caseSteps(c).filter(s => s.state !== 'waiting');
+    return `
+      <div class="trace-content">
+        <div class="trace-intro">
+          <strong>Evidence behind the decision</strong>
+          <span>${steps.length} recorded events</span>
+        </div>
+        <div class="evidence-list">
+          ${steps.map(s => `
+            <article class="evidence-item">
+              <h3>${icon(s.state === 'warning' ? 'warning' : 'file')}${esc(s.title)}</h3>
+              <p>${esc(s.evidence)}</p>
+              <span class="badge" style="margin-top:8px">${esc(s.tool)}</span>
+            </article>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  function verification(c) {
+    const executed = c.verified || c.status === 'Verifying' || c.status === 'Failed' || (c.id === 'NR-1024' && c.stage >= 8);
+    const expected = c.resolution === 'Refund' ? 'Refund completed' : c.resolution === 'Replacement' ? 'Replacement created; quantity 1 reserved' : c.resolution === 'Cancellation' ? 'Order cancelled; payment reversal confirmed' : 'Specialist review completed';
+    const observed = c.verified ? expected : c.status === 'Failed' ? 'Payment verification response unavailable' : executed ? 'Action recorded; verification pending' : 'No action executed yet';
+    return `
+      <div class="verification-content">
+        <div class="verification-head">
+          ${icon(c.verified ? 'circleCheck' : 'shield')}
+          <div>
+            <h3>${c.verified ? 'Resolution verified' : 'Resolution verification'}</h3>
+            <p>${c.verified ? 'The observed outcome matches the expected state.' : 'Execution is only one part of resolution.'}</p>
+          </div>
+        </div>
+        <dl class="facts">
+          <div><dt>Action</dt><dd>${esc(c.resolution)} ${executed ? 'recorded' : 'planned'}</dd></div>
+          <div><dt>Expected state</dt><dd>${expected}</dd></div>
+          <div><dt>Observed state</dt><dd>${observed}</dd></div>
+          <div><dt>Verification</dt><dd>${c.verified ? '<span class="badge green">' + icon('shield') + 'Verified</span>' : c.status === 'Failed' ? '<span class="badge red">' + icon('x') + 'Verification failed</span>' : '<span class="badge">' + icon('clock') + 'Not yet verified</span>'}</dd></div>
+          ${c.verified ? `<div><dt>Completed at</dt><dd>${new Date(c.updated).toLocaleString('en-IN')}</dd></div>` : ''}
+        </dl>
+        <div class="verification-note ${c.verified ? '' : 'pending'}">
+          ${c.verified ? 'The case is resolved. The action and its resulting state have both been checked.' : 'An executed action does not mean a verified resolution. This case stays open until verification confirms the outcome.'}
+        </div>
+      </div>
+    `;
+  }
+
+  function approvalPanel(c) {
+    if (!c) return `
+      <section class="panel approval-panel">
+        <div class="panel-header">
+          <h2>${icon('shield')} Human oversight</h2>
+          <span class="badge green">Clear</span>
+        </div>
+        <div class="empty">
+          <div class="empty-icon">${icon('circleCheck')}</div>
+          <h3>All caught up</h3>
+          <p>No cases are waiting for your approval. Agents can continue within their policy limits.</p>
+          <button class="text-button" data-action="navigate" data-view="activity">View decision activity ${icon('arrow')}</button>
+        </div>
+      </section>
+    `;
+    return `
+      <section class="panel approval-panel ${focusMode && state.view === 'approvals' ? 'spotlight-focus-target' : ''}" aria-label="Approval for ${c.id}" id="approval-card-${c.id}">
+        <div class="panel-header">
+          <h2>${icon('shield')} Human approval required</h2>
+          <span class="badge amber">${pending().length} pending</span>
+        </div>
+        <div class="approval-content">
+          <div class="row person">
+            ${avatar(c.customer, c.tone)}
+            <div>
+              <strong>${esc(c.customer)}</strong>
+              <small>${c.id} · ${esc(c.issue)}</small>
+            </div>
+          </div>
+          <div class="refund-amount">
+            <div>
+              <label>Proposed refund</label>
+              <strong class="number">${money(c.amount)}</strong>
+            </div>
+            <span class="badge red">${icon('warning')} High risk</span>
+          </div>
+          <p class="approval-reason">${esc(c.reason)}</p>
+          <div class="recommendation">${icon('bolt')} Agent recommends approval</div>
+          <div class="approval-actions">
+            <button class="button primary" data-action="review" data-id="${c.id}" data-decision="approve">
+              ${icon('check')} Approve refund
+            </button>
+            <button class="button" data-action="review" data-id="${c.id}" data-decision="reject">
+              ${icon('x')} Reject
+            </button>
+          </div>
+          <button class="text-button review-link" data-action="select" data-id="${c.id}">Review case ${icon('arrow')}</button>
+        </div>
+      </section>
+    `;
+  }
+
+  function contextPanel() {
+    const c = selected();
+    const replanning = c.id === 'NR-1024' && c.stage === 5;
+    const [color, symbol] = statuses[c.status] || ['blue', 'bolt'];
+    return `
+      <section class="panel context-panel">
+        <div class="panel-header">
+          <h2>Agent context</h2>
+          ${icon('bolt')}
+        </div>
+        <div class="context-content">
+          <div class="context-state">
+            ${icon(symbol)}
+            <span>${replanning ? 'The goal stays. The plan adapts.' : esc(c.status === 'Resolved' ? 'Outcome confirmed. Goal achieved.' : c.status)}</span>
+          </div>
+          <p>${esc(c.reason)}</p>
+          <dl class="context-grid">
+            <div><dt>Resolution goal</dt><dd>${esc(c.resolution)}</dd></div>
+            <div><dt>Risk assessment</dt><dd>${riskBadge(c.risk)}</dd></div>
+            <div><dt>Policy check</dt><dd>${icon(c.status === 'Planning' ? 'clock' : 'check')} ${['Planning', 'Investigating'].includes(c.status) ? 'In review' : c.status === 'Escalated' ? 'Needs review' : 'Evaluated'}</dd></div>
+            <div><dt>Human involvement</dt><dd>${c.status === 'Awaiting Approval' ? 'Approval required' : c.decision === 'approve' ? 'Approved' : c.risk === 'Low' ? 'Not required' : 'Review required'}</dd></div>
+          </dl>
+        </div>
+      </section>
+    `;
+  }
+
+  function filteredCases() {
+    return cases.filter(c => {
+      const q = state.query.trim().toLowerCase();
+      const match = !q || [c.id, c.customer, c.issue, c.order, c.product].some(v => v.toLowerCase().includes(q));
+      const status = state.filter === 'all' ||
+        (state.filter === 'active' && !terminal.includes(c.status)) ||
+        (state.filter === 'resolving' && ['Investigating', 'Planning', 'Executing', 'Replanning', 'Verifying'].includes(c.status)) ||
+        c.status === state.filter;
+      return match && status && (state.risk === 'all' || c.risk === state.risk);
+    });
+  }
+
+  function queue(full) {
+    const rows = filteredCases();
+    const shown = full ? rows : rows.slice(0, state.limit);
+    return `
+      <div class="queue-header">
+        <div>
+          <h2>${full ? 'Case management' : 'Case queue'} <span class="badge" style="margin-left:5px">${rows.length}</span></h2>
+          <p>${state.query ? `Results for “${esc(state.query)}”` : 'A place for every case. A clear next step.'}</p>
+        </div>
+        <div class="queue-tools">
+          <label class="sr-only" for="status-filter">Filter cases by status</label>
+          <select id="status-filter">
+            <option value="all">All statuses</option>
+            <option value="active" ${state.filter === 'active' ? 'selected' : ''}>Active cases</option>
+            <option value="resolving" ${state.filter === 'resolving' ? 'selected' : ''}>Agent resolving</option>
+            ${Object.keys(statuses).map(s => `<option ${state.filter === s ? 'selected' : ''}>${s}</option>`).join('')}
+          </select>
+          <label class="sr-only" for="risk-filter">Filter cases by risk</label>
+          <select id="risk-filter">
+            <option value="all">All risks</option>
+            ${['Low', 'Medium', 'High'].map(r => `<option ${state.risk === r ? 'selected' : ''}>${r}</option>`).join('')}
+          </select>
+          ${full ? '<button class="button small" data-action="clear-filters">Reset</button>' : ''}
+        </div>
+      </div>
+      <div class="panel">
+        ${state.loading ? `
+          <div class="skeleton-view" role="status" aria-label="Refreshing case queue">
+            <div class="skeleton skeleton-line short"></div>
+            <div class="skeleton skeleton-line"></div>
+            <div class="skeleton skeleton-line mid"></div>
+            <div class="skeleton skeleton-line"></div>
+            <span class="sr-only">Refreshing demo cases</span>
+          </div>
+        ` : rows.length ? `
+          <div class="table-wrap">
+            <table class="case-table">
+              <caption class="sr-only">Customer cases with agent status, risk, resolution and update time</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Case</th>
+                  <th scope="col" class="customer-col">Customer</th>
+                  <th scope="col" class="issue-col">Issue</th>
+                  <th scope="col">Agent status</th>
+                  <th scope="col" class="risk-col">Risk</th>
+                  <th scope="col" class="resolution-col">Resolution</th>
+                  <th scope="col" class="updated-col">Updated</th>
+                  <th scope="col"><span class="sr-only">Open case</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                ${shown.map(c => `
+                  <tr class="${state.selected === c.id ? 'selected' : ''}" data-case="${c.id}">
+                    <td><button class="case-link" data-action="select" data-id="${c.id}" aria-label="Open case ${c.id}, ${esc(c.customer)}">${c.id}</button></td>
+                    <td class="customer-col"><span class="customer">${avatar(c.customer, c.tone)}${esc(c.customer)}</span></td>
+                    <td class="issue-col">${esc(c.issue)}</td>
+                    <td>${badge(c.status)}</td>
+                    <td class="risk-col">${riskBadge(c.risk)}</td>
+                    <td class="resolution-col">${esc(c.resolution)}</td>
+                    <td class="updated updated-col">${ago(c.updated)}</td>
+                    <td class="arrow-cell">${icon('right')}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div class="table-footer">
+            <span>Showing ${shown.length} of ${rows.length} cases · Demo workspace</span>
+            ${!full ? `<button class="text-button" data-action="navigate" data-view="cases">View all cases ${icon('arrow')}</button>` : '<span>Select a case to inspect its workflow</span>'}
+          </div>
+        ` : `
+          <div class="empty">
+            <div class="empty-icon">${icon('search')}</div>
+            <h3>No matching cases</h3>
+            <p>Try another customer, case reference, or filter to find what you’re looking for.</p>
+            <button class="button small" data-action="clear-filters">Clear filters</button>
+          </div>
+        `}
+      </div>
+    `;
+  }
+
+  function casesView() {
+    return `
+      ${mainHeading('Case management', 'Every customer goal, from first investigation to final outcome.', `<button class="button" data-action="refresh">${icon('refresh')} Refresh queue</button>`)}
+      ${state.error ? `
+        <div class="error-panel" role="alert">
+          <div>
+            <h3>Unable to load case activity</h3>
+            <p>The demo service did not return the latest events. Your current cases are still available.</p>
+          </div>
+          <button class="button small" data-action="retry">Retry</button>
+        </div>
+      ` : ''}
+      ${queue(true)}
+    `;
+  }
+
+  function approvalsView() {
+    return `
+      ${mainHeading('Human oversight', 'Deliberate decisions where judgment matters.')}
+      <div class="section-label">
+        <h2>Awaiting your approval <span class="badge amber" style="margin-left:7px">${pending().length}</span></h2>
+        <span class="right-label">${icon('lock')} No action before approval</span>
+      </div>
+      <div class="approvals-grid">
+        ${pending().length ? pending().map(approvalPanel).join('') : approvalPanel(null)}
+      </div>
+      <section class="queue-section">
+        <div class="queue-header">
+          <div>
+            <h2>Decision history</h2>
+            <p>Approval decisions made in this demo session.</p>
+          </div>
+        </div>
+        <div class="panel">
+          ${audit.length ? audit.map(activityItem).join('') : '<div class="empty"><h3>No decisions yet</h3><p>Reviewed approvals and their outcomes will appear here.</p></div>'}
+        </div>
+      </section>
+    `;
+  }
+
+  function customersView() {
+    const list = cases.filter(c => !state.query || [c.customer, c.email, c.id, c.order].some(v => v.toLowerCase().includes(state.query.toLowerCase())));
+    return `
+      ${mainHeading('Your customers', 'The people behind every resolution.')}
+      <div class="section-label">
+        <h2>Customer directory <span class="badge" style="margin-left:7px">${list.length}</span></h2>
+        <span class="right-label">Demo customer records</span>
+      </div>
+      ${list.length ? `
+        <div class="customers-grid">
+          ${list.map(c => `
+            <article class="panel customer-card">
+              <div class="row">
+                ${avatar(c.customer, c.tone)}
+                <div>
+                  <h3>${esc(c.customer)}</h3>
+                  <p>${c.id} · ${c.order}</p>
+                </div>
+              </div>
+              <dl class="facts">
+                <div><dt>Current issue</dt><dd>${esc(c.issue)}</dd></div>
+                <div><dt>Agent status</dt><dd>${badge(c.status)}</dd></div>
+                <div><dt>Resolution</dt><dd>${esc(c.resolution)}</dd></div>
+              </dl>
+              <button class="text-button" data-action="select" data-id="${c.id}">View customer case ${icon('arrow')}</button>
+            </article>
+          `).join('')}
+        </div>
+      ` : `
+        <div class="panel empty">
+          <h3>No customers found</h3>
+          <p>Try searching by customer name, email, or case reference.</p>
+          <button class="button small" data-action="clear-filters">Clear search</button>
+        </div>
+      `}
+    `;
+  }
+
+  function activityItem(event) {
+    return `
+      <article class="activity-row">
+        ${icon(event.icon || 'activity')}
+        <div>
+          <strong>${esc(event.title)}</strong>
+          <p>${esc(event.detail)}</p>
+          <button class="text-button" data-action="select" data-id="${event.id}">${event.id} ${icon('arrow')}</button>
+        </div>
+        <time datetime="${new Date(event.time).toISOString()}">${ago(event.time)}</time>
+      </article>
+    `;
+  }
+
+  function activityView() {
+    const events = [
+      ...audit,
+      ...cases.map(c => ({
+        id: c.id,
+        title: `${c.customer} · ${c.status}`,
+        detail: c.reason,
+        time: c.updated,
+        icon: (statuses[c.status] || [])[1] || 'activity'
+      }))
+    ].sort((a, b) => b.time - a.time).filter(e => !state.query || [e.id, e.title, e.detail].some(v => v.toLowerCase().includes(state.query.toLowerCase())));
+
+    return `
+      ${mainHeading('Resolution activity', 'An accountable record of decisions, actions, and verified outcomes.')}
+      <div class="section-label">
+        <h2>Workspace activity</h2>
+        <span class="right-label">${icon('clock')} Current demo session</span>
+      </div>
+      <div class="panel">
+        ${events.length ? events.map(activityItem).join('') : '<div class="empty"><h3>No matching activity</h3><p>Try a different search to find a decision or case.</p><button class="button small" data-action="clear-filters">Clear search</button></div>'}
+      </div>
+    `;
+  }
+
+  function render() {
+    const focus = document.activeElement;
+    const focusId = focus?.id;
+    const action = focus?.dataset?.action;
+    const tab = focus?.dataset?.tab;
+
+    renderSidebar();
+    document.getElementById('breadcrumb-title').textContent = pageNames[state.view] || 'Overview';
+    document.title = `NovaResolve · ${pageNames[state.view] || 'Overview'}`;
+
+    const pageChanged = previousView !== state.view;
+    const tabChanged = previousTab !== state.tab;
+
+    const main = document.getElementById('main');
+    main.classList.remove('page-enter');
+    const views = { overview, cases: casesView, approvals: approvalsView, customers: customersView, activity: activityView };
+    main.innerHTML = (views[state.view] || overview)() + `
+      <footer class="footer">
+        <span class="row">${icon('shield')} NovaResolve · Autonomous customer resolution</span>
+        <span>Demo workspace · Simulated data</span>
+      </footer>
+    `;
+
+    if (pageChanged) {
+      void main.offsetWidth;
+      main.classList.add('page-enter');
+    } else if (tabChanged) {
+      document.getElementById('case-tab-panel')?.classList.add('tab-enter');
+    }
+
+    previousView = state.view;
+    previousTab = state.tab;
+    previousStage = selected().status;
+
+    if (focusId && focusId !== 'global-search') document.getElementById(focusId)?.focus({ preventScroll: true });
+    else if (action === 'tab') document.querySelector(`[data-tab="${tab}"]`)?.focus({ preventScroll: true });
+  }
+
+  function navigate(view, { preserve = false } = {}) {
+    if (!pageNames[view]) view = 'overview';
+    if (!preserve) {
+      state.query = '';
+      document.getElementById('global-search').value = '';
+      state.filter = 'all';
+      state.risk = 'all';
+    }
+    state.view = view;
+    closePopover();
+    closeMenu();
+    if (location.hash !== `#${view}`) history.pushState(null, '', `#${view}`);
+    render();
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }
+
+  function selectCase(id) {
+    if (!caseById(id)) return;
+    state.selected = id;
+    state.tab = 'trace';
+    state.expanded.clear();
+    navigate('overview');
+    document.querySelector('.case-title')?.setAttribute('tabindex', '-1');
+    document.querySelector('.case-title')?.focus({ preventScroll: true });
+    
+    // Trigger cinematic spotlight burst on the selected case panel
+    triggerSpotlightBurst(document.getElementById('case-panel'));
+  }
+
+  // Cinematic Spotlight Pop-Out Function (3.2 seconds burst)
+  function triggerSpotlightBurst(el) {
+    if (!el) return;
+    clearTimeout(burstTimer);
+    el.classList.remove('spotlight-burst');
+    void el.offsetWidth;
+    el.classList.add('spotlight-burst');
+    burstTimer = setTimeout(() => {
+      el.classList.remove('spotlight-burst');
+    }, 3200);
+  }
+
+  function toggleFocusMode() {
+    focusMode = !focusMode;
+    document.body.classList.toggle('focus-mode-active', focusMode);
+    const btn = document.getElementById('focus-button');
+    if (btn) btn.classList.toggle('active', focusMode);
+    render();
+    if (focusMode) {
+      setTimeout(() => {
+        const target = document.querySelector('.spotlight-focus-target') || document.getElementById('case-panel');
+        if (target) {
+          const topbar = document.querySelector('.topbar');
+          const offset = (topbar ? topbar.offsetHeight : 64) + 16;
+          const targetTop = target.getBoundingClientRect().top + window.pageYOffset - offset;
+          window.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+        }
+      }, 50);
+    }
+    toast(focusMode ? 'Spotlight Focus Mode activated. Press Esc to exit.' : 'Focus Mode deactivated.');
+  }
+
+  function switchPersona(personaKey) {
+    if (!personas[personaKey]) return;
+    activePersona = personaKey;
+    const p = personas[activePersona];
+    if (p.defaultCase && caseById(p.defaultCase)) {
+      state.selected = p.defaultCase;
+    }
+    const dlg = document.getElementById('dialog');
+    if (dlg && dlg.open) dlg.close();
+    closePopover();
+    render();
+    toast(`Active persona switched to ${p.name} (${p.role}).`);
+  }
+
+  function personaPopover() {
+    if (state.popover === 'persona') { closePopover(); return; }
+    state.popover = 'persona';
+    const root = document.getElementById('popover-root');
+    root.innerHTML = `
+      <div class="popover persona-popover" role="dialog" aria-label="Switch User Persona">
+        <div class="popover-title">
+          <span>Switch User Persona</span>
+        </div>
+        <div class="persona-menu-list">
+          ${Object.entries(personas).map(([key, p]) => `
+            <button class="persona-menu-item ${activePersona === key ? 'active' : ''}" data-action="select-persona-quick" data-persona="${key}">
+              <span class="avatar ${p.tone}">${p.initials}</span>
+              <div class="persona-menu-info">
+                <strong>${esc(p.name)}</strong>
+                <small>${esc(p.role)} · ${esc(p.department)}</small>
+              </div>
+              ${activePersona === key ? icon('circleCheck', 'check-icon') : ''}
+            </button>
+          `).join('')}
+        </div>
+        <div class="popover-footer">
+          <button class="text-button" data-action="profile">${icon('sliders')} Governance & Preferences</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function toggleTheme(forced) {
+    currentTheme = forced || (currentTheme === 'dark' ? 'light' : 'dark');
+    document.documentElement.setAttribute('data-theme', currentTheme);
+    localStorage.setItem('novaresolve-theme', currentTheme);
+    const themeBtn = document.getElementById('theme-button');
+    if (themeBtn) themeBtn.innerHTML = icon(currentTheme === 'dark' ? 'sun' : 'moon');
+    toast(`Switched to ${currentTheme === 'dark' ? 'Dark' : 'Light'} theme.`);
+  }
+
+  function toast(message) {
+    clearTimeout(toastTimer);
+    const el = document.getElementById('toast');
+    el.innerHTML = icon('circleCheck') + `<span>${esc(message)}</span>`;
+    el.hidden = false;
+    toastTimer = setTimeout(() => { el.hidden = true; }, 4000);
+  }
+
+  function closeMenu() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('menu-button')?.setAttribute('aria-expanded', 'false');
+  }
+
+  function closePopover() {
+    state.popover = null;
+    document.getElementById('popover-root').innerHTML = '';
+    document.getElementById('notification-button')?.setAttribute('aria-expanded', 'false');
+  }
+
+  function notifications() {
+    if (state.popover === 'notifications') { closePopover(); return; }
+    state.popover = 'notifications';
+    document.getElementById('notification-button')?.setAttribute('aria-expanded', 'true');
+    document.getElementById('popover-root').innerHTML = `
+      <section class="popover" aria-label="Notifications">
+        <div class="popover-title">Needs your attention <span class="badge amber" style="margin-left:8px">${pending().length}</span></div>
+        ${pending().length ? pending().map(c => `
+          <button class="popover-item" data-action="review" data-id="${c.id}" data-decision="approve">
+            ${icon('shield')}
+            <span>
+              <strong>${esc(c.customer)} · ${money(c.amount)} refund</strong>
+              <small>${c.id} · Approval required</small>
+            </span>
+          </button>
+        `).join('') : '<div class="popover-content"><p>You’re all caught up. No approvals need attention.</p></div>'}
+      </section>
+    `;
+  }
+
+  function openDialog(title, body, actions) {
+    lastDialogFocus = document.activeElement;
+    closePopover();
+    const d = document.getElementById('dialog');
+    d.innerHTML = `
+      <div class="dialog-header">
+        <h2 id="dialog-title">${title}</h2>
+        <button class="icon-button" data-action="close-dialog" aria-label="Close dialog">${icon('x')}</button>
+      </div>
+      <div class="dialog-body">${body}</div>
+      <div class="dialog-actions">${actions || '<button class="button" data-action="close-dialog">Done</button>'}</div>
+    `;
+    d.showModal();
+  }
+
+  function review(id, decision) {
+    const c = caseById(id);
+    if (!c || c.status !== 'Awaiting Approval') {
+      toast('This case no longer requires approval.');
+      return;
+    }
+    openDialog(
+      decision === 'approve' ? 'Review refund approval' : 'Reject refund request',
+      `
+        <span class="badge amber">${icon('shield')} Human decision required</span>
+        <p>${esc(c.recommendation)}</p>
+        <dl class="facts">
+          <div><dt>Customer</dt><dd>${esc(c.customer)} · ${c.id}</dd></div>
+          <div><dt>Order</dt><dd>#${c.order} · ${esc(c.product)}</dd></div>
+          <div><dt>Refund amount</dt><dd><strong>${money(c.amount)}</strong></dd></div>
+          <div><dt>Risk reason</dt><dd>${esc(c.reason)}</dd></div>
+        </dl>
+        <label for="decision-note">${decision === 'reject' ? 'Reason for rejection (required)' : 'Decision note (optional)'}</label>
+        <textarea id="decision-note" placeholder="${decision === 'reject' ? 'Explain what needs further review...' : 'Add context for the decision record...'}" maxlength="500" ${decision === 'reject' ? 'required' : ''}></textarea>
+        <p class="demo-disclosure">Demo action recorded by <strong>${personas[activePersona].name}</strong> (${personas[activePersona].role}). No real payment is made.</p>
+      `,
+      `
+        <button class="button" data-action="close-dialog">Cancel</button>
+        <button class="button ${decision === 'approve' ? 'primary' : 'danger'}" data-action="confirm-decision" data-id="${id}" data-decision="${decision}">
+          ${icon(decision === 'approve' ? 'check' : 'x')}
+          ${decision === 'approve' ? 'Confirm approval' : 'Confirm rejection'}
+        </button>
+      `
+    );
+  }
+
+  function decision(id, value) {
+    const c = caseById(id);
+    if (!c || c.status !== 'Awaiting Approval') return;
+    const note = document.getElementById('decision-note');
+    if (value === 'reject' && !note.value.trim()) {
+      note.setCustomValidity('Please add a reason for rejection.');
+      note.reportValidity();
+      return;
+    }
+    note.setCustomValidity('');
+    c.decision = value;
+    c.decisionNote = note.value.trim();
+    c.updated = Date.now();
+    c.status = value === 'approve' ? 'Executing' : 'Escalated';
+    c.reason = value === 'approve' ? `Human approval received from ${personas[activePersona].name}. The agent is submitting the refund.` : `Refund rejected by ${personas[activePersona].name}. ${c.decisionNote}`;
+    audit.unshift({
+      id: c.id,
+      title: `Refund ${value === 'approve' ? 'approved' : 'rejected'} by ${personas[activePersona].name}`,
+      detail: `${money(c.amount)} · ${c.customer}${c.decisionNote ? ' · ' + c.decisionNote : ''}`,
+      time: Date.now(),
+      icon: value === 'approve' ? 'check' : 'x'
+    });
+    document.getElementById('dialog').close();
+    render();
+    toast(value === 'approve' ? 'Demo approval recorded. The agent will execute and verify.' : 'Demo rejection recorded. Case escalated for specialist review.');
+
+    // Trigger spotlight pop-out on the overview case card
+    triggerSpotlightBurst(document.getElementById('case-panel'));
+
+    if (value === 'approve') {
+      const first = setTimeout(() => {
+        c.status = 'Verifying';
+        c.reason = 'Refund submitted. Confirming the payment record matches the approved amount.';
+        c.updated = Date.now();
+        render();
+        const second = setTimeout(() => {
+          c.status = 'Resolved';
+          c.verified = true;
+          c.reason = 'Refund completed and verified against the payment record.';
+          c.updated = Date.now();
+          audit.unshift({
+            id: c.id,
+            title: 'Refund outcome verified',
+            detail: `${money(c.amount)} refund confirmed. Case resolved.`,
+            time: Date.now(),
+            icon: 'shield'
+          });
+          approvalTimers.delete(c.id);
+          render();
+          toast(`${c.id}: simulated refund verified. Case resolved.`);
+        }, 2400);
+        approvalTimers.set(c.id, second);
+      }, 2000);
+      approvalTimers.set(c.id, first);
+    }
+  }
+
+  function runReplay() {
+    if (state.playing) {
+      clearTimeout(replayTimer);
+      state.playing = false;
+      render();
+      toast('Demo replay paused. Inspect any completed step.');
+      return;
+    }
+    state.playing = true;
+    state.selected = 'NR-1024';
+    state.tab = 'trace';
+    state.expanded.clear();
+    const c = caseById('NR-1024');
+    c.stage = 0;
+    c.verified = false;
+    c.updated = Date.now();
+    applyStage(c);
+    navigate('overview');
+    toast('Replaying the demo workflow from investigation to verification.');
+    triggerSpotlightBurst(document.getElementById('case-panel'));
+
+    function advance() {
+      if (!state.playing) return;
+      c.stage++;
+      c.updated = Date.now();
+      applyStage(c);
+      if (c.stage >= 9) {
+        state.playing = false;
+        audit.unshift({
+          id: c.id,
+          title: 'Replacement outcome verified',
+          detail: 'Delhi constraint resolved through Jaipur inventory. One unit reserved and verified.',
+          time: Date.now(),
+          icon: 'shield'
+        });
+        render();
+        toast('Goal achieved. Replacement routed to Jaipur and verified.');
+        triggerSpotlightBurst(document.getElementById('case-panel'));
+        return;
+      }
+      render();
+      replayTimer = setTimeout(advance, c.stage === 5 ? 3000 : 1400);
+    }
+    replayTimer = setTimeout(advance, 1200);
+  }
+
+  function applyStage(c) {
+    const stageStates = ['Investigating', 'Investigating', 'Planning', 'Executing', 'Replanning', 'Replanning', 'Replanning', 'Executing', 'Verifying', 'Resolved'];
+    c.status = stageStates[c.stage];
+    c.verified = c.stage === 9;
+    c.reason = [
+      'Matching the customer to their account.',
+      'Inspecting the order and delivery record.',
+      'Checking replacement eligibility and risk.',
+      'Checking available inventory at the original warehouse.',
+      'Delhi warehouse has no inventory. The original route cannot fulfill this request.',
+      'Original fulfillment warehouse has no available inventory.',
+      'Jaipur has 4 units available. Updating the replacement plan.',
+      'Reserving 1 unit and creating the replacement at Jaipur.',
+      'Checking replacement RP-2084 and the reserved inventory quantity.',
+      'Replacement RP-2084 created at Jaipur. One unit reserved and independently verified.'
+    ][c.stage];
+  }
+
+  function refreshQueue() {
+    if (state.loading) return;
+    state.loading = true;
+    state.error = false;
+    render();
+    loadTimer = setTimeout(() => {
+      state.loading = false;
+      render();
+      toast('Demo queue refreshed. All session changes retained.');
+    }, 600);
+  }
+
+  function systemDialog() {
+    openDialog(
+      'System status',
+      `
+        <span class="badge green">${icon('check')} Frontend engine active</span>
+        <p>This workspace demonstrates the NovaResolve autonomous customer resolution experience using live fixtures.</p>
+        <dl class="facts">
+          <div><dt>Runtime</dt><dd>Node.js Native Server (:3000)</dd></div>
+          <div><dt>Active Persona</dt><dd>${personas[activePersona].name} (${personas[activePersona].role})</dd></div>
+          <div><dt>Autonomous Cap</dt><dd>${money(autonomousThreshold)}</dd></div>
+          <div><dt>Agent Rerouting</dt><dd>${autoRerouteEnabled ? 'Enabled (Jaipur fallback)' : 'Disabled'}</dd></div>
+          <div><dt>Backend</dt><dd>FastAPI Engine (:8000 ready)</dd></div>
+        </dl>
+      `,
+      '<button class="button primary" data-action="close-dialog">Done</button>'
+    );
+  }
+
+  // Comprehensive User Profile & Governance Preferences Modal
+  function preferences() {
+    const p = personas[activePersona];
+    const casesOverThreshold = cases.filter(c => c.amount > autonomousThreshold).length;
+
+    openDialog(
+      'Operator Profile & Governance Settings',
+      `
+        <div class="row" style="margin-bottom: 16px;">
+          ${avatar(p.name, p.tone)}
+          <div>
+            <h3 style="font-size: 16px;">${esc(p.name)}</h3>
+            <p style="font-size: 12.5px;">${esc(p.role)} · <strong>${esc(p.level)}</strong></p>
+            <p style="font-size: 11.5px; color: var(--muted);">${esc(p.email)}</p>
+          </div>
+        </div>
+
+        <label style="margin-top: 10px;">Switch User Persona / View Mode</label>
+        <div class="persona-selector">
+          <div class="persona-card ${activePersona === 'manager' ? 'active' : ''}" data-action="set-persona" data-persona="manager">
+            ${avatar('Alex Morgan')}
+            <strong>Alex Morgan</strong>
+            <small>Resolution Lead</small>
+          </div>
+          <div class="persona-card ${activePersona === 'specialist' ? 'active' : ''}" data-action="set-persona" data-persona="specialist">
+            ${avatar('Priya Sharma', 'mauve')}
+            <strong>Priya Sharma</strong>
+            <small>Dispute Specialist</small>
+          </div>
+          <div class="persona-card ${activePersona === 'customer' ? 'active' : ''}" data-action="set-persona" data-persona="customer">
+            ${avatar('Rahul Sharma', 'sand')}
+            <strong>Rahul Sharma</strong>
+            <small>Customer View</small>
+          </div>
+        </div>
+
+        <div class="slider-container">
+          <div class="slider-header">
+            <div>
+              <label style="margin: 0; font-size: 13px;">Autonomous Approval Ceiling</label>
+              <small style="color: var(--muted); display: block;">Amounts exceeding this value require manual manager sign-off.</small>
+            </div>
+            <strong id="threshold-val">${money(autonomousThreshold)}</strong>
+          </div>
+          <input type="range" class="range-slider" id="threshold-range" min="2000" max="25000" step="500" value="${autonomousThreshold}">
+          <div class="range-meta">
+            <span>₹2,000 (Conservative)</span>
+            <span id="threshold-impact-badge" style="font-weight: 600; color: var(--accent);">${casesOverThreshold} cases require oversight</span>
+            <span>₹25,000 (Aggressive)</span>
+          </div>
+        </div>
+
+        <label>Operational Governance Policies</label>
+        <div class="toggle-row">
+          <div class="toggle-label">
+            <strong>Autonomous Inventory Rerouting</strong>
+            <small>Automatically search secondary warehouses when primary stock is zero</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="reroute-toggle" ${autoRerouteEnabled ? 'checked' : ''}>
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+
+        <div class="toggle-row">
+          <div class="toggle-label">
+            <strong>Spotlight Focus Mode</strong>
+            <small>Dim canvas background when inspecting decisions or replans (Shortcut: F)</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="focus-toggle" ${focusMode ? 'checked' : ''}>
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+
+        <label style="margin-top: 16px;">Interface Appearance</label>
+        <div class="theme-selector-grid">
+          <button class="theme-btn ${currentTheme === 'light' ? 'active' : ''}" data-action="set-theme-mode" data-theme="light">
+            ${icon('sun')} Light
+          </button>
+          <button class="theme-btn ${currentTheme === 'dark' ? 'active' : ''}" data-action="set-theme-mode" data-theme="dark">
+            ${icon('moon')} Dark
+          </button>
+          <button class="theme-btn" data-action="toggle-theme">
+            ${icon('refresh')} Toggle
+          </button>
+        </div>
+      `,
+      `
+        <button class="button" data-action="close-dialog">Cancel</button>
+        <button class="button primary" data-action="save-preferences">Apply & Save</button>
+      `
+    );
+
+    // Bind real-time range slider update
+    const slider = document.getElementById('threshold-range');
+    const valDisplay = document.getElementById('threshold-val');
+    const impactBadge = document.getElementById('threshold-impact-badge');
+    if (slider && valDisplay) {
+      slider.addEventListener('input', e => {
+        const val = Number(e.target.value);
+        valDisplay.textContent = money(val);
+        const over = cases.filter(c => c.amount > val).length;
+        if (impactBadge) {
+          impactBadge.textContent = `${over} case${over === 1 ? '' : 's'} require oversight`;
+        }
+      });
+    }
+  }
+
+  function applyThresholdUpdate(newThreshold) {
+    autonomousThreshold = newThreshold;
+    // Re-evaluate pending status based on new threshold
+    cases.forEach(c => {
+      if (c.status === 'Awaiting Approval' && c.amount <= autonomousThreshold && !c.decision) {
+        c.status = 'Executing';
+        c.reason = `Qualifies for autonomous execution under updated threshold (${money(autonomousThreshold)}).`;
+      } else if (c.status === 'Executing' && c.amount > autonomousThreshold && !c.verified) {
+        c.status = 'Awaiting Approval';
+        c.reason = `Refund amount exceeds the ${money(autonomousThreshold)} autonomous approval threshold.`;
+      }
+    });
+    render();
+    toast(`Autonomous approval threshold set to ${money(autonomousThreshold)}.`);
+  }
+
+  document.addEventListener('click', event => {
+    const button = event.target.closest('[data-action]');
+    if (!button) {
+      const nav = event.target.closest('a[href^="#"]');
+      if (nav && pageNames[nav.hash.slice(1)]) {
+        event.preventDefault();
+        navigate(nav.hash.slice(1));
+        return;
+      }
+      const row = event.target.closest('[data-case]');
+      if (row) {
+        selectCase(row.dataset.case);
+        return;
+      }
+      if (!event.target.closest('.popover')) closePopover();
+      return;
+    }
+
+    const a = button.dataset.action;
+    if (a === 'navigate') navigate(button.dataset.view);
+    else if (a === 'menu') {
+      const open = document.getElementById('sidebar').classList.toggle('open');
+      button.setAttribute('aria-expanded', String(open));
+      if (open) document.querySelector('.nav a')?.focus();
+    }
+    else if (a === 'close-menu') { closeMenu(); document.getElementById('menu-button')?.focus(); }
+    else if (a === 'notifications') notifications();
+    else if (a === 'system') systemDialog();
+    else if (a === 'profile') preferences();
+    else if (a === 'toggle-theme') toggleTheme();
+    else if (a === 'toggle-focus') toggleFocusMode();
+    else if (a === 'exit-focus') { if (focusMode) toggleFocusMode(); }
+    else if (a === 'set-theme-mode') { toggleTheme(button.dataset.theme); preferences(); }
+    else if (a === 'toggle-persona-popover') personaPopover();
+    else if (a === 'select-persona-quick') switchPersona(button.dataset.persona);
+    else if (a === 'set-persona') switchPersona(button.dataset.persona);
+    else if (a === 'save-preferences') {
+      const slider = document.getElementById('threshold-range');
+      if (slider) {
+        applyThresholdUpdate(Number(slider.value));
+      }
+      const rerouteCheckbox = document.getElementById('reroute-toggle');
+      if (rerouteCheckbox) {
+        autoRerouteEnabled = rerouteCheckbox.checked;
+      }
+      const focusCheckbox = document.getElementById('focus-toggle');
+      if (focusCheckbox && focusCheckbox.checked !== focusMode) {
+        toggleFocusMode();
+      }
+      document.getElementById('dialog').close();
+      render();
+    }
+    else if (a === 'metric') {
+      state.filter = button.dataset.filter;
+      state.risk = 'all';
+      state.query = '';
+      document.getElementById('global-search').value = '';
+      navigate('cases', { preserve: true });
+    }
+    else if (a === 'select') selectCase(button.dataset.id);
+    else if (a === 'tab') { state.tab = button.dataset.tab; render(); }
+    else if (a === 'step') {
+      const key = `${selected().id}-${button.dataset.step}`;
+      state.expanded.has(key) ? state.expanded.delete(key) : state.expanded.add(key);
+      render();
+      document.querySelector(`[data-action="step"][data-step="${button.dataset.step}"]`)?.focus({ preventScroll: true });
+    }
+    else if (a === 'expand-all') {
+      if (state.expanded.size) state.expanded.clear();
+      else caseSteps(selected()).forEach((s, i) => { if (s.state !== 'waiting') state.expanded.add(`${selected().id}-${i}`); });
+      render();
+    }
+    else if (a === 'review') review(button.dataset.id, button.dataset.decision);
+    else if (a === 'confirm-decision') decision(button.dataset.id, button.dataset.decision);
+    else if (a === 'close-dialog') document.getElementById('dialog').close();
+    else if (a === 'replay') runReplay();
+    else if (a === 'clear-filters') {
+      state.query = '';
+      state.filter = 'all';
+      state.risk = 'all';
+      document.getElementById('global-search').value = '';
+      render();
+    }
+    else if (a === 'refresh' || a === 'retry') refreshQueue();
+    else if (a === 'case-info') {
+      const c = selected();
+      openDialog(
+        `${c.id} · Case information`,
+        `
+          ${badge(c.status)}
+          <p style="margin: 10px 0">${esc(c.goal)}</p>
+          <dl class="facts">
+            <div><dt>Customer</dt><dd>${esc(c.customer)}</dd></div>
+            <div><dt>Email</dt><dd>${esc(c.email)}</dd></div>
+            <div><dt>Order</dt><dd>#${c.order}</dd></div>
+            <div><dt>Product</dt><dd>${esc(c.product)}</dd></div>
+            <div><dt>Amount</dt><dd>${money(c.amount)}</dd></div>
+            <div><dt>Next action</dt><dd>${esc(c.recommendation)}</dd></div>
+          </dl>
+          <p class="demo-disclosure">Simulated fixture data for NovaResolve operations.</p>
+        `
+      );
+    }
+  });
+
+  document.addEventListener('change', event => {
+    if (event.target.id === 'status-filter') { state.filter = event.target.value; render(); }
+    else if (event.target.id === 'risk-filter') { state.risk = event.target.value; render(); }
+  });
+
+  document.getElementById('global-search').addEventListener('input', event => {
+    state.query = event.target.value;
+    if (state.view === 'overview' || state.view === 'approvals') {
+      state.view = 'cases';
+      history.replaceState(null, '', '#cases');
+    }
+    render();
+  });
+
+  document.addEventListener('keydown', event => {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k' && !document.getElementById('dialog').open) {
+      event.preventDefault();
+      document.getElementById('global-search').focus();
+    }
+    if (event.key.toLowerCase() === 'f' && !['input', 'textarea', 'select'].includes(document.activeElement?.tagName?.toLowerCase()) && !document.getElementById('dialog').open) {
+      event.preventDefault();
+      toggleFocusMode();
+    }
+    if (event.key === 'Escape') {
+      if (focusMode) { toggleFocusMode(); }
+      if (state.popover) { closePopover(); document.getElementById('notification-button')?.focus(); }
+      if (document.getElementById('sidebar').classList.contains('open')) { closeMenu(); document.getElementById('menu-button')?.focus(); }
+    }
+    if (event.target.matches('[role="tab"]') && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+      event.preventDefault();
+      const tabs = ['trace', 'evidence', 'verification'];
+      const index = tabs.indexOf(state.tab);
+      state.tab = event.key === 'Home' ? tabs[0] : event.key === 'End' ? tabs[2] : tabs[(index + (event.key === 'ArrowRight' ? 1 : 2)) % 3];
+      render();
+      document.getElementById(`tab-${state.tab}`)?.focus();
+    }
+  });
+
+  document.getElementById('dialog').addEventListener('close', () => {
+    if (lastDialogFocus?.isConnected) lastDialogFocus.focus();
+    else document.getElementById('main').focus({ preventScroll: true });
+  });
+
+  document.getElementById('dialog').addEventListener('click', event => {
+    const d = event.currentTarget, r = d.getBoundingClientRect();
+    if (event.target === d && (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom)) d.close();
+  });
+
+  window.addEventListener('popstate', () => {
+    state.view = pageNames[location.hash.slice(1)] ? location.hash.slice(1) : 'overview';
+    state.query = '';
+    document.getElementById('global-search').value = '';
+    render();
+  });
+
+  document.getElementById('menu-button').innerHTML = icon('menu');
+  document.getElementById('breadcrumb-chevron').innerHTML = icon('right');
+  document.getElementById('search-icon').innerHTML = icon('search');
+
+  state.view = pageNames[location.hash.slice(1)] ? location.hash.slice(1) : 'overview';
+  render();
+  </script>
+</body>
+</html>
