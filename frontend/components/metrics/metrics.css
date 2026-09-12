@@ -1,0 +1,149 @@
+/* Metrics Component Styles */
+
+.page-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+.page-heading .greeting {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  font-weight: 750;
+  font-family: var(--font-display);
+  color: var(--muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+.page-heading h1 {
+  font-size: 27px;
+  font-weight: 800;
+  color: var(--ink-heading);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.page-heading p {
+  font-size: 14.5px;
+  margin-top: 6px;
+  color: var(--muted);
+}
+.heading-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.demo-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.demo-tag .dot {
+  background: #22c55e;
+}
+
+/* 5 KPI Metric Cards Grid */
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+}
+.metric {
+  padding: 18px 18px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  text-align: left;
+  min-width: 0;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+  cursor: pointer;
+}
+.metric:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow);
+  border-color: var(--line-strong);
+}
+
+.metric .metric-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--muted);
+  font-weight: 600;
+  font-family: var(--font-display);
+}
+.metric .metric-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--surface-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+}
+.metric .metric-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.metric strong.number {
+  font-size: 32px;
+  font-weight: 750;
+  line-height: 1.1;
+  margin: 12px 0 6px;
+  display: block;
+  font-family: var(--font-mono);
+  color: var(--ink-heading);
+}
+
+.metric p {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.metric p svg {
+  width: 12px;
+  height: 12px;
+}
+
+.metric.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  box-shadow: 0 4px 14px var(--accent-glow);
+}
+.metric.primary .metric-label { color: rgba(255, 255, 255, 0.9); }
+.metric.primary strong.number { color: #ffffff; }
+.metric.primary p { color: rgba(255, 255, 255, 0.85); }
+.metric.primary .metric-icon { background: rgba(255, 255, 255, 0.2); color: #ffffff; }
+
+.metric .amber-text { color: var(--amber); }
+.metric .red-text { color: var(--red); }
+.metric .green-text { color: var(--green); }
+
+@media (max-width: 1200px) {
+  .metrics { gap: 10px; }
+  .metric { padding: 14px 12px; }
+  .metric strong.number { font-size: 26px; }
+}
+@media (max-width: 900px) {
+  .metrics { grid-template-columns: repeat(2, 1fr); }
+  .metrics .metric:first-child { grid-column: span 2; }
+}

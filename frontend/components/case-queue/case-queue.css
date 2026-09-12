@@ -1,0 +1,134 @@
+/* Case Queue Component Styles */
+
+.queue-section {
+  margin-top: 32px;
+}
+.queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.queue-header h2 {
+  font-size: 18px;
+  font-weight: 750;
+  color: var(--ink-heading);
+}
+.queue-header p {
+  font-size: 12.5px;
+  margin: 3px 0 0;
+  color: var(--muted);
+}
+.queue-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.queue-tools select {
+  padding: 8px 12px;
+  min-height: 36px;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--ink);
+  border-radius: 7px;
+  font-size: 12.5px;
+  outline: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+.queue-tools select:focus {
+  border-color: var(--accent);
+}
+
+.table-wrap {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.case-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  white-space: nowrap;
+}
+.case-table th {
+  background: var(--surface-subtle);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 750;
+  font-family: var(--font-display);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.case-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--ink);
+}
+.case-table tr:last-child td {
+  border-bottom: 0;
+}
+.case-table tbody tr {
+  cursor: pointer;
+  transition: background 150ms var(--ease);
+}
+.case-table tbody tr:hover {
+  background: var(--surface-subtle);
+}
+.case-table tbody tr.selected {
+  background: var(--blue-soft);
+}
+
+.case-table .case-link {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  cursor: pointer;
+}
+.case-table .customer {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 600;
+  color: var(--ink-heading);
+  font-family: var(--font-display);
+}
+.case-table .customer .avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  font-size: 10px;
+}
+
+.risk {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.risk .dot {
+  width: 6px;
+  height: 6px;
+}
+.risk.low { color: #16a34a; }
+.risk.medium { color: #d97706; }
+.risk.high { color: #e11d48; }
+
+.table-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}

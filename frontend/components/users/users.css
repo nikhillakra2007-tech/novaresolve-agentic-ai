@@ -1,0 +1,347 @@
+/* Users Component Styles: Persona Switcher & Governance Preferences */
+
+/* Quick Persona Switcher in Topbar */
+.persona-switcher-dropdown {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.persona-chip-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+  padding: 4px 10px 4px 6px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 160ms var(--ease);
+  color: var(--ink);
+  font-family: var(--font-display);
+}
+.persona-chip-button:hover {
+  background: var(--surface);
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-sm);
+}
+.persona-chip-button .avatar-sm {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-display);
+}
+.persona-chip-button .avatar-sm.mauve { background: #a21caf; }
+.persona-chip-button .avatar-sm.sand { background: #0d9488; }
+.persona-chip-button .chip-name {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--ink-heading);
+}
+.persona-chip-button .chip-badge {
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--line);
+  color: var(--muted);
+  padding: 1px 7px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.persona-chip-button svg {
+  width: 12px;
+  height: 12px;
+  color: var(--muted);
+}
+
+/* Persona Popover */
+.persona-popover {
+  position: absolute;
+  top: 56px;
+  right: 140px;
+  width: 320px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  z-index: 120;
+  animation: dialog-enter 180ms var(--ease);
+  overflow: hidden;
+}
+.persona-menu-list {
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.persona-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: transparent;
+  border: 0;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: background 150ms var(--ease);
+  color: var(--ink);
+}
+.persona-menu-item:hover {
+  background: var(--surface-subtle);
+}
+.persona-menu-item.active {
+  background: var(--blue-soft);
+}
+.persona-menu-item .avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+.persona-menu-info {
+  flex: 1;
+  min-width: 0;
+}
+.persona-menu-info strong {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 700;
+  font-family: var(--font-display);
+  color: var(--ink-heading);
+}
+.persona-menu-info small {
+  display: block;
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.persona-menu-item .check-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+}
+.popover-footer {
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-subtle);
+  display: flex;
+  justify-content: flex-end;
+}
+.text-button {
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.text-button:hover {
+  background: var(--blue-soft);
+}
+
+/* Persona Role Badge in Page Heading */
+.persona-role-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-display);
+  padding: 3px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.persona-role-pill.manager {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+.persona-role-pill.specialist {
+  background: #fdf4ff;
+  color: #a21caf;
+  border: 1px solid #f5d0fe;
+}
+.persona-role-pill.customer {
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+[data-theme="dark"] .persona-role-pill.manager {
+  background: #1e3a8a;
+  color: #93c5fd;
+  border-color: #2563eb;
+}
+[data-theme="dark"] .persona-role-pill.specialist {
+  background: #581c87;
+  color: #f0abfc;
+  border-color: #9333ea;
+}
+[data-theme="dark"] .persona-role-pill.customer {
+  background: #14532d;
+  color: #86efac;
+  border-color: #16a34a;
+}
+
+/* Modal Personas Grid */
+.persona-switcher {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 12px 0 20px;
+}
+.persona-card {
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 150ms var(--ease);
+}
+.persona-card:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-subtle);
+}
+.persona-card.active {
+  border-color: var(--accent);
+  background: var(--blue-soft);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+.persona-card .avatar {
+  margin: 0 auto 8px;
+}
+.persona-card strong {
+  font-size: 12.5px;
+  color: var(--ink-heading);
+  display: block;
+  font-family: var(--font-display);
+}
+.persona-card small {
+  font-size: 11px;
+  color: var(--muted);
+  display: block;
+}
+
+/* Governance Sliders & Switches */
+.slider-container {
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+  margin: 16px 0;
+}
+.slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.range-slider {
+  width: 100%;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+.range-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.toggle-label strong {
+  display: block;
+  font-size: 13px;
+  color: var(--ink-heading);
+  font-family: var(--font-display);
+}
+.toggle-label small {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+}
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.switch-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: var(--line-strong);
+  transition: 0.2s;
+  border-radius: 22px;
+}
+.switch-slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.2s;
+  border-radius: 50%;
+}
+.switch input:checked + .switch-slider {
+  background-color: var(--accent);
+}
+.switch input:checked + .switch-slider:before {
+  transform: translateX(18px);
+}
+
+.theme-selector-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+.theme-btn {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.theme-btn.active {
+  border-color: var(--accent);
+  background: var(--blue-soft);
+  color: var(--accent);
+  font-weight: 700;
+}

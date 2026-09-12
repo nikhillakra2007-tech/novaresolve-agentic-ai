@@ -1,0 +1,189 @@
+/* Approvals Component Styles: Human Oversight, Decision Stack & Customer Panel */
+
+.side-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.approval-panel {
+  border-top: 3px solid var(--amber);
+}
+
+.approval-content {
+  padding: 18px 20px 20px;
+}
+
+.approval-content .person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.approval-content .person strong {
+  font-size: 14px;
+  color: var(--ink-heading);
+  display: block;
+  font-family: var(--font-display);
+}
+.approval-content .person small {
+  font-size: 12px;
+  color: var(--muted);
+  display: block;
+}
+
+.approval-figure {
+  background: var(--surface-subtle);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.approval-figure span {
+  font-size: 12px;
+  color: var(--muted);
+  display: block;
+}
+.approval-figure strong {
+  font-size: 24px;
+  font-family: var(--font-mono);
+  color: var(--ink-heading);
+}
+
+.approval-reason {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 18px;
+}
+
+.approval-actions {
+  display: flex;
+  gap: 10px;
+}
+.approval-actions .button {
+  flex: 1;
+  justify-content: center;
+}
+.button.approve {
+  background: var(--green);
+  border-color: var(--green);
+  color: white;
+}
+.button.approve:hover {
+  background: #15803d;
+}
+.button.reject {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--red);
+}
+.button.reject:hover {
+  background: var(--red-soft);
+  border-color: var(--red);
+}
+
+/* Context Panel */
+.context-panel {
+  padding: 16px 20px;
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+[data-theme="dark"] .context-panel {
+  background: #092617;
+  border-color: #14532d;
+}
+.context-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #166534;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+[data-theme="dark"] .context-title {
+  color: #86efac;
+}
+.context-copy {
+  font-size: 12px;
+  color: #15803d;
+  margin: 0;
+  line-height: 1.5;
+}
+[data-theme="dark"] .context-copy {
+  color: #a7f3d0;
+}
+
+.trust-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  padding: 0 4px;
+}
+.trust-note svg {
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* Customer Protected Order Side Card */
+.customer-side-card .panel-header {
+  padding: 16px 18px 14px;
+}
+.customer-side-body {
+  padding: 16px 18px 20px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.customer-side-item {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 14px;
+  background: var(--surface-subtle);
+  padding: 12px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+}
+.customer-side-grid {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.customer-side-grid span {
+  font-size: 10.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  display: block;
+}
+.customer-side-grid strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 13px;
+  color: var(--ink-heading);
+}
+
+/* Approvals Grid View */
+.approvals-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+@media (max-width: 900px) {
+  .approvals-grid {
+    grid-template-columns: 1fr;
+  }
+}
