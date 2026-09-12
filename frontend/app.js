@@ -49,7 +49,7 @@ const paths = {
 const icon = (name, cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name] || paths.file}"/></svg>`;
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const initials = name => name.split(' ').map(s => s[0]).slice(0, 2).join('');
-const money = n => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
+const money = n => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n);
 const now = Date.now();
 const terminal = ['Resolved', 'Escalated', 'Failed'];
 
@@ -77,7 +77,7 @@ const ago = t => {
 
 // Application State
 let activePersona = 'manager';
-let autonomousThreshold = 10000;
+let autonomousThreshold = 100;
 let autoRerouteEnabled = true;
 let focusMode = false;
 let currentTheme = localStorage.getItem('novaresolve-theme') || 'light';
@@ -100,13 +100,197 @@ function createDemoCases() {
 }
 
 let cases = createDemoCases();
-const state = { view: 'overview', selected: 'NR-1024', tab: 'trace', filter: 'all', risk: 'all', query: '', limit: 6, playing: false, expanded: new Set(), popover: null };
+let isLiveApiConnected = false;
+const state = { view: 'overview', selected: 'NR-1024', tab: 'trace', filter: 'all', risk: 'all', query: '', limit: 6, playing: false, runningCaseId: null, expanded: new Set(), popover: null };
 let replayTimer, toastTimer, burstTimer;
 
 const caseById = id => cases.find(c => c.id === id);
 const selected = () => caseById(state.selected) || cases[0];
 const pending = () => cases.filter(c => c.status === 'Awaiting Approval');
 const pageNames = { overview: 'Overview', cases: 'Cases', approvals: 'Approvals', customers: 'Customers', activity: 'Activity' };
+
+function mapBackendCaseToFrontend(c) {
+  const statusMap = {
+    open: 'Investigating',
+    investigating: 'Investigating',
+    planning: 'Planning',
+    awaiting_approval: 'Awaiting Approval',
+    executing: 'Executing',
+    replanning: 'Replanning',
+    verifying: 'Verifying',
+    resolved: 'Resolved',
+    escalated: 'Escalated',
+    failed: 'Failed'
+  };
+
+  const riskMap = {
+    high: 'High',
+    medium: 'Medium',
+    low: 'Low'
+  };
+
+  const resType = c.resolution_type ? (c.resolution_type.charAt(0).toUpperCase() + c.resolution_type.slice(1)) : 'Resolution';
+
+  return {
+    id: c.id,
+    customer: c.customer_name || 'Customer',
+    email: c.customer_email || '',
+    issue: (c.issue_type || '').replace(/_/g, ' '),
+    goal: c.customer_goal || '',
+    status: statusMap[c.status] || 'Investigating',
+    risk: riskMap[c.risk_level] || 'Low',
+    resolution: resType,
+    amount: c.order_amount || 0,
+    order: c.order_id ? c.order_id.slice(0, 8) : 'NC-ORDER',
+    product: c.product_name || 'NovaCart Item',
+    updated: c.updated_at ? new Date(c.updated_at).getTime() : Date.now(),
+    tone: c.risk_level === 'high' ? 'mauve' : '',
+    reason: c.customer_goal,
+    recommendation: c.current_step ? `Current step: ${c.current_step}` : 'Autonomous resolution workflow',
+    verified: c.status === 'resolved',
+    realTrace: []
+  };
+}
+
+async function loadCasesFromApi() {
+  try {
+    const res = await fetch('/api/agent/cases');
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        cases = data.map(mapBackendCaseToFrontend);
+        isLiveApiConnected = true;
+        if (!cases.some(c => c.id === state.selected)) {
+          state.selected = cases[0].id;
+        }
+        await loadCaseTrace(state.selected);
+        render();
+        return;
+      }
+    }
+  } catch (err) {
+    console.warn('Backend API connection note:', err.message);
+  }
+}
+
+async function loadCaseTrace(caseId) {
+  try {
+    const res = await fetch(`/api/agent/case/${caseId}/trace`);
+    if (res.ok) {
+      const trace = await res.json();
+      const c = caseById(caseId);
+      if (c && Array.isArray(trace) && trace.length > 0) {
+        c.realTrace = trace;
+      }
+    }
+  } catch (err) {
+    console.warn('Trace load error:', err.message);
+  }
+}
+
+async function triggerAgentRun(caseId) {
+  const c = caseById(caseId);
+  if (!c) return;
+  state.runningCaseId = caseId;
+  toast(`Autonomous agent started on case for ${c.customer}...`);
+  render();
+
+  try {
+    const res = await fetch('/api/agent/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ case_id: caseId })
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({ detail: 'HTTP error ' + res.status }));
+      toast(`Agent error: ${errData.detail || 'Execution error'}`, 'error');
+      state.runningCaseId = null;
+      render();
+      return;
+    }
+
+    const data = await res.json();
+    const statusMap = {
+      open: 'Investigating',
+      investigating: 'Investigating',
+      planning: 'Planning',
+      awaiting_approval: 'Awaiting Approval',
+      executing: 'Executing',
+      replanning: 'Replanning',
+      verifying: 'Verifying',
+      resolved: 'Resolved',
+      escalated: 'Escalated',
+      failed: 'Failed'
+    };
+
+    c.status = statusMap[data.status] || data.status;
+    c.reason = data.final_outcome || data.reason || c.reason;
+    c.verified = data.status === 'resolved';
+    if (Array.isArray(data.execution_trace) && data.execution_trace.length > 0) {
+      c.realTrace = data.execution_trace;
+    } else {
+      await loadCaseTrace(caseId);
+    }
+
+    toast(`Agent completed: ${c.status} (${data.steps_executed} steps, ${data.replans} replans)`);
+  } catch (err) {
+    toast(`Network failure: ${err.message}`, 'error');
+  } finally {
+    state.runningCaseId = null;
+    render();
+  }
+}
+
+async function handleApprovalReview(caseId, decision) {
+  const c = caseById(caseId);
+  if (!c) return;
+  toast(`Submitting ${decision === 'approve' ? 'approval' : 'rejection'} to backend...`);
+
+  try {
+    const res = await fetch('/api/agent/resume', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        case_id: caseId,
+        approved: decision === 'approve',
+        reviewer_notes: `Supervisor review from NovaResolve dashboard: ${decision}`
+      })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const statusMap = {
+        open: 'Investigating',
+        investigating: 'Investigating',
+        planning: 'Planning',
+        awaiting_approval: 'Awaiting Approval',
+        executing: 'Executing',
+        replanning: 'Replanning',
+        verifying: 'Verifying',
+        resolved: 'Resolved',
+        escalated: 'Escalated',
+        failed: 'Failed'
+      };
+
+      c.status = statusMap[data.status] || data.status;
+      c.reason = data.final_outcome || data.reason || c.reason;
+      c.verified = data.status === 'resolved';
+      if (Array.isArray(data.execution_trace) && data.execution_trace.length > 0) {
+        c.realTrace = data.execution_trace;
+      } else {
+        await loadCaseTrace(caseId);
+      }
+      toast(`Case resumed: ${c.status}. State verified.`);
+    } else {
+      const err = await res.json().catch(() => ({ detail: 'HTTP ' + res.status }));
+      toast(`Resume error: ${err.detail || 'Failed to resume'}`, 'error');
+    }
+  } catch (err) {
+    toast(`Network failure: ${err.message}`, 'error');
+  }
+  render();
+}
 
 // View Renderers
 function renderOverviewView() {
@@ -118,12 +302,22 @@ function renderOverviewView() {
     ? 'Tier-2 Escalations Queue · 3 priority investigations assigned to your desk.'
     : 'Order #NC-48391 · NovaSound wireless headphones · Live autonomous replacement tracking.';
 
+  const isRunning = state.runningCaseId === selected().id;
+  const isSelectedUuid = selected().id && selected().id.includes('-');
+
   const replayBtn = `
-    <button class="button primary" data-action="replay">
-      ${icon(state.playing ? 'pause' : 'play')}
-      <span>${state.playing ? 'Pause replay' : 'Replay demo'}</span>
+    <button class="button primary" data-action="${isSelectedUuid ? 'run-agent' : 'replay'}" ${isRunning ? 'disabled' : ''}>
+      ${icon(isRunning ? 'refresh' : state.playing ? 'pause' : 'play', isRunning ? 'spinning' : '')}
+      <span>${isRunning ? 'Agent running...' : isSelectedUuid ? 'Run Agent' : state.playing ? 'Pause replay' : 'Replay demo'}</span>
     </button>
-    <span class="demo-tag"><span class="dot"></span>Demo data</span>
+    <button class="button secondary" data-action="refresh-data" title="Sync latest data from backend" style="padding: 6px 10px;">
+      ${icon('refresh')}
+      <span>Sync API</span>
+    </button>
+    <span class="demo-tag" style="${isLiveApiConnected ? 'background: rgba(16, 185, 129, 0.12); color: var(--green); border-color: rgba(16, 185, 129, 0.25);' : ''}">
+      <span class="dot" style="${isLiveApiConnected ? 'background: var(--green);' : ''}"></span>
+      ${isLiveApiConnected ? 'Live Backend API' : 'Demo data'}
+    </span>
   `;
 
   const steps = getCaseSteps(selected(), state.playing, money, p.name);
@@ -389,6 +583,7 @@ document.addEventListener('click', event => {
       state.selected = row.dataset.case;
       state.tab = 'trace';
       state.view = 'overview';
+      loadCaseTrace(state.selected).then(() => render());
       render();
       return;
     }
@@ -466,16 +661,31 @@ document.addEventListener('click', event => {
     else getCaseSteps(selected(), state.playing, money, PERSONAS[activePersona].name).forEach((s, i) => { if (s.state !== 'waiting') state.expanded.add(`${selected().id}-${i}`); });
     render();
   }
-  else if (a === 'replay') runReplay();
+  else if (a === 'replay') {
+    if (selected().id && selected().id.includes('-') && selected().id.length > 10) {
+      triggerAgentRun(selected().id);
+    } else {
+      runReplay();
+    }
+  }
+  else if (a === 'run-agent') triggerAgentRun(selected().id);
+  else if (a === 'refresh-data') {
+    loadCasesFromApi().then(() => toast('Cases synchronized from backend API.'));
+  }
   else if (a === 'review') {
-    const c = caseById(button.dataset.id);
+    const caseId = button.dataset.id;
     const dec = button.dataset.decision;
-    if (c) {
-      c.decision = dec;
-      c.status = dec === 'approve' ? 'Executing' : 'Escalated';
-      c.reason = dec === 'approve' ? `Approved by ${PERSONAS[activePersona].name}. Autonomous refund executing.` : `Rejected by ${PERSONAS[activePersona].name}. Awaiting specialist review.`;
-      render();
-      toast(`Case ${c.id} marked as ${dec === 'approve' ? 'Approved' : 'Rejected'}.`);
+    if (caseId && caseId.includes('-') && caseId.length > 10) {
+      handleApprovalReview(caseId, dec);
+    } else {
+      const c = caseById(caseId);
+      if (c) {
+        c.decision = dec;
+        c.status = dec === 'approve' ? 'Executing' : 'Escalated';
+        c.reason = dec === 'approve' ? `Approved by ${PERSONAS[activePersona].name}. Autonomous refund executing.` : `Rejected by ${PERSONAS[activePersona].name}. Awaiting specialist review.`;
+        render();
+        toast(`Case ${c.id} marked as ${dec === 'approve' ? 'Approved' : 'Rejected'}.`);
+      }
     }
   }
   else if (a === 'metric') {
@@ -488,6 +698,7 @@ document.addEventListener('click', event => {
     state.selected = button.dataset.id;
     state.view = 'overview';
     state.tab = 'trace';
+    loadCaseTrace(state.selected).then(() => render());
     render();
   }
 });
@@ -528,3 +739,4 @@ document.getElementById('breadcrumb-chevron').innerHTML = icon('right');
 document.getElementById('search-icon').innerHTML = icon('search');
 state.view = pageNames[location.hash.slice(1)] ? location.hash.slice(1) : 'overview';
 render();
+loadCasesFromApi();

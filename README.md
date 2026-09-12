@@ -1,260 +1,404 @@
-# NovaResolve — Agentic AI Customer Resolution Platform
+# NovaResolve — Autonomous Agentic Customer Resolution Platform
 
-**NovaResolve** is an autonomous agentic AI customer-resolution platform built for a simulated e-commerce enterprise called **NovaCart**.
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110.0-009688.svg?style=flat&logo=fastapi)](https://fastapi.tiangolo.com)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16+-336791.svg?style=flat&logo=postgresql)](https://www.postgresql.org)
+[![Google Gemini](https://img.shields.io/badge/LLM-Gemini_2.0_Flash-4285F4.svg?style=flat&logo=google)](https://aistudio.google.com)
+[![Tests](https://img.shields.io/badge/Tests-136%20Passed%20(100%25)-success.svg?style=flat)](file:///C:/Users/nikhi/OneDrive/Desktop/coding/AGENTIC_AI/backend/tests/)
+[![Architecture](https://img.shields.io/badge/Architecture-Autonomous%20Agentic%20Loop-orange.svg?style=flat)](#system-architecture)
+[![Repository](https://img.shields.io/badge/GitHub-novaresolve--agentic--ai-181717.svg?style=flat&logo=github)](https://github.com/nikhillakra2007-tech/novaresolve-agentic-ai)
 
-The system is designed to investigate customer issues, inspect enterprise data, evaluate business and risk constraints, execute simulated state-changing resolutions (refunds, replacements, cancellations), adapt when actions are blocked or fail, and independently verify the final outcome.
+**NovaResolve** is an enterprise-grade Autonomous Agentic AI Customer Resolution Platform built for the e-commerce company **NovaCart**. 
 
----
-
-## Current Architecture & Scope
-
-This repository contains **Phase 1 (Database Foundation)**, **Phase 2 (Domain Services & REST APIs)**, **Phase 3 (Agent Tools & Capability Layer)**, **Phase 4 (Autonomous Agent Runtime)**, and **Phase 5 (LLM Integration & Agent Decision Making)**:
-- **Application Framework**: Python 3.12, FastAPI (modular routing under `/api`)
-- **Database**: PostgreSQL 18.x directly (UUID PKs, check constraints, foreign keys, performance indexes)
-- **ORM & Sessions**: SQLAlchemy 2.x declarative models and scoped session dependency
-- **Domain Services**:
-  1. `CustomerService`: ID/email lookups, active requester validations
-  2. `OrderService`: Order item retrieval, customer ownership validations
-  3. `ShipmentService`: Carrier tracking events, dynamic `is_delayed` calculation
-  4. `InventoryService`: Warehouse stock checks (observable zero-stock), alternative active warehouse discovery
-  5. `PolicyService`: Priority rule evaluator, threshold checks, approval detection, `allowed_reasons` enforcement
-  6. `RefundService`: Transactional refund execution, balance validation, pessimistic row lock, $100 supervisor threshold
-  7. `ReplacementService`: Pessimistic locking (`with_for_update`), quantity persistence, atomic stock reservation
-  8. `CancellationService`: Fulfillment state inspection, shipment conflict enforcement
-  9. `CaseService`: Safe case lifecycle updates, plan tracking, sanitized agent audit event logging
-  10. `VerificationService`: Independent post-resolution state verification across resolutions, orders, and inventory
-- **Controlled Capability Layer (`agents/tools/`)**:
-  - 13 typed, deterministic capabilities organized into Observation, Decision, Action, and Case Support categories.
-  - Standardized `ToolResult` envelope with preserved domain error statuses.
-  - Central `TOOL_REGISTRY` with strict execution boundaries (blocks raw SQL, eval, and arbitrary execution).
-- **Agent Decision Making & Runtime (`agents/planning/`, `agents/runtime/`)**:
-  - **Decision Provider Abstraction**: `DecisionProvider` base interface with `LLMDecisionProvider` (primary) and `DeterministicDecisionProvider` (fallback).
-  - **Google Gemini Integration**: Powered by official `google-genai` SDK (`gemini-3.7-flash`) supporting native structured function calling with JSON fallback under free-tier limits.
-  - **Structured Action Validation**: LLM outputs typed decisions validated against `TOOL_REGISTRY` and Pydantic schemas.
-  - **Risk & Approval Gates**: `RiskEvaluator` enforces approval requirements on high-risk actions ($100+ refunds, etc.) before execution.
-  - **Bounded Adaptation & Replanning**: `AgentReplanner` adapts on zero-inventory (searches alternative warehouses) and rechecks policy on strategy pivots.
-  - **Independent Verification**: Action success != verified success; resolution requires independent confirmation via `VerificationService`.
-  - **Loop Bounds**: `MAX_AGENT_STEPS = 20`, `MAX_SAME_TOOL_ATTEMPTS = 3`, `MAX_REPLANS = 3`.
-
-> [!NOTE]
-> **Phase Boundaries**: Phase 5 establishes real LLM decision making with strict safety bounds. Phase 6 is the upcoming interactive Next.js customer resolution dashboard (built with the `scroll-craft` skill).
+Unlike simple chatbots that generate unverified text, NovaResolve operates as a **closed-loop autonomous system**: it investigates enterprise telemetry, respects deterministic return and risk policies, executes transactional state mutations (atomic stock reservations and payment refunds), dynamically adapts and replans around real-world constraints (such as zero-inventory warehouses), and **independently verifies** that the observed database state matches the customer's goal before resolving a case.
 
 ---
 
-## REST API Endpoints
+## Live Links & Quick Access
 
-### 1. Information & Read Services
-| Method | Endpoint | Description | HTTP Status |
-|---|---|---|---|
-| `GET` | `/api/health` | PostgreSQL connectivity, latency, and pool stats | 200 / 503 |
-| `GET` | `/api/customers/{customer_id}` | Fetch customer profile by UUID | 200 / 404 |
-| `GET` | `/api/customers/by-email/{email}` | Fetch customer profile by email | 200 / 404 |
-| `GET` | `/api/orders/{order_id}` | Fetch order with items (optional `customer_id` check) | 200 / 404 |
-| `GET` | `/api/shipments/{order_id}` | Fetch shipment tracking & dynamic delay flag | 200 / 404 |
-| `GET` | `/api/inventory/{product_id}/{warehouse_id}` | Exact stock check (preserves zero-stock observation) | 200 / 404 |
-| `GET` | `/api/inventory/{product_id}/alternatives` | Discover active alternative warehouses with stock | 200 / 404 |
-
-### 2. Decision Service
-| Method | Endpoint | Description | HTTP Status |
-|---|---|---|---|
-| `POST` | `/api/policies/evaluate` | Evaluate policy constraints (pure decision, no mutation) | 200 / 400 |
-
-### 3. State-Changing Resolution Services
-| Method | Endpoint | Description | HTTP Status |
-|---|---|---|---|
-| `POST` | `/api/refunds` | Process transactional refund ($100 approval check, balance limit) | 201 / 400 / 403 / 404 |
-| `POST` | `/api/replacements` | Create replacement order (row lock, stock reservation, 409 if out of stock) | 201 / 400 / 403 / 409 |
-| `POST` | `/api/cancellations` | Cancel order (409 conflict if already shipped or in-transit) | 200 / 400 / 403 / 409 |
+- **GitHub Repository**: [nikhillakra2007-tech/novaresolve-agentic-ai](https://github.com/nikhillakra2007-tech/novaresolve-agentic-ai)
+- **Local Dashboard Interface**: [http://127.0.0.1:3000](http://127.0.0.1:3000)
+- **Interactive Swagger REST Docs**: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- **ReDoc API Documentation**: [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
+- **System Health Endpoint**: [http://127.0.0.1:8000/api/health](http://127.0.0.1:8000/api/health)
 
 ---
 
-## Directory Structure
+## Visual Showcase & Dashboard Experience
 
+### 1. Autonomous Resolution Command Center
+The NovaResolve dashboard gives customer resolution teams real-time visibility into active autonomous investigations, queued cases, and agent telemetry.
+
+![Dashboard Overview](docs/screenshots/dashboard_overview_light.png)
+
+*Key Highlights:*
+- **Live Metrics Cards**: Real-time counters for active cases, pending human approvals, escalated disputes, and verified resolutions.
+- **Authoritative Telemetry**: Visualizes what the backend actually did—never invents fake agent actions.
+- **Filterable Queue**: Real-time sorting and filtering across risk levels (Low, Medium, High) and resolution lifecycles.
+
+---
+
+### 2. Real-Time Execution Trace & Adaptive Replanning
+When an agent pursues a resolution, every investigation step, policy evaluation, tool invocation, and replanning pivot is streamed to an audit-grade timeline.
+
+![Execution Trace Timeline](docs/screenshots/execution_trace_timeline.png)
+
+*Key Highlights:*
+- **Constraint Detection**: When the primary warehouse has 0 units in stock, the agent marks a `CONSTRAINT_DETECTED` event.
+- **Autonomous Replanning**: The agent dynamically triggers `search_alternative_inventory`, discovers eligible fulfillment hubs, and reroutes fulfillment without failing the ticket.
+- **Independent State Verification**: Action execution != verified outcome. The `verify_resolution` tool independently validates database parity before marking the case resolved.
+
+---
+
+### 3. Human-in-the-Loop Risk & Approval Gate
+NovaResolve enforces strict financial safety bounds. High-risk actions (such as refunds exceeding the $100.00 autonomous threshold) automatically freeze state-changing mutations and wait for supervisor sign-off.
+
+![Human Approval Gate](docs/screenshots/human_approval_gate.png)
+
+*Key Highlights:*
+- **Zero Pre-Approval Mutations**: The database remains untouched until explicit human review.
+- **Resume Flow**: Approving or rejecting via the UI calls `POST /api/agent/resume`, allowing the agent loop to pick up the staged plan, execute the approved action, and run verification.
+
+---
+
+### 4. Multi-Persona Perspectives & Spotlight Focus Mode
+Designed for high-velocity resolution operations with customized role views, dark/light themes, and immersive keyboard-driven focus mode (`F` key).
+
+| Multi-Persona Control Room | Spotlight Focus Mode (Dark Theme) |
+| :---: | :---: |
+| ![Multi Persona Selector](docs/screenshots/multi_persona_selector.png) | ![Focus Mode Dark](docs/screenshots/focus_mode_dark.png) |
+| *Switch dynamically between Resolution Manager, Tier-2 Dispute Specialist, and Customer View.* | *Distraction-free spotlight focus mode dimming background elements during critical investigations.* |
+
+---
+
+## System Architecture
+
+NovaResolve connects user interaction, REST APIs, autonomous reasoning, deterministic tools, and PostgreSQL ACID storage into a single authoritative flow:
+
+```mermaid
+flowchart TD
+    subgraph UI_Layer["1. Presentation & Control Layer"]
+        Customer["Customer / Resolution Manager"]
+        Frontend["NovaResolve Modern Dashboard\n(Vanilla ES Modules + Server Proxy :3000)"]
+        Customer -->|Interacts with Cases & Approvals| Frontend
+    end
+
+    subgraph API_Layer["2. Authoritative REST API (FastAPI :8000)"]
+        REST["FastAPI Gateway /api"]
+        AgentRoutes["Agent Endpoints\n(/run, /resume, /cases, /trace)"]
+        DomainRoutes["Domain Endpoints\n(/refunds, /replacements, /cancellations, /inventory)"]
+        Frontend -->|Reverse Proxy / Direct Fetch| REST
+        REST --> AgentRoutes
+        REST --> DomainRoutes
+    end
+
+    subgraph Agent_Core["3. Autonomous Agent Runtime (agents/)"]
+        AgentLoop["NovaResolveAgent Runtime Loop\n(Bounded: Max 20 Steps, Max 3 Replans)"]
+        StateManager["StateManager\n(Audit Evidence, State Transitions)"]
+        DecisionProvider["Decision Provider Interface"]
+        LLM["Google Gemini 2.0 Flash\n(Structured Function Calling)"]
+        Deterministic["Deterministic Fallback Engine\n(Safety Fallback on Error/Missing Key)"]
+        RiskEngine["RiskEvaluator Gate\n($100+ Approval Threshold Enforcement)"]
+        Replanner["AgentReplanner\n(Zero-Stock Rerouting & Strategy Pivots)"]
+
+        AgentRoutes --> AgentLoop
+        AgentLoop --> StateManager
+        AgentLoop --> DecisionProvider
+        DecisionProvider -->|Primary| LLM
+        DecisionProvider -.->|Fallback| Deterministic
+        AgentLoop --> RiskEngine
+        AgentLoop --> Replanner
+    end
+
+    subgraph Tools_Domain["4. Tool Registry & Domain Services"]
+        ToolRegistry["Central Tool Registry\n(13 Sandboxed Typed Tools)"]
+        ToolExecutor["ToolExecutor\n(Context: DB Session & Case ID)"]
+        
+        subgraph Services["Domain Services Layer"]
+            CustService["CustomerService"]
+            OrdService["OrderService"]
+            ShipService["ShipmentService"]
+            InvService["InventoryService"]
+            PolService["PolicyService"]
+            RefService["RefundService (Pessimistic Lock)"]
+            RepService["ReplacementService (Atomic Reserve)"]
+            CancService["CancellationService (Conflict Check)"]
+            VerifService["VerificationService (Independent Audit)"]
+        end
+
+        AgentLoop --> ToolExecutor
+        ToolExecutor --> ToolRegistry
+        ToolRegistry --> Services
+    end
+
+    subgraph DB_Layer["5. PostgreSQL Enterprise Storage (:5432)"]
+        Postgres[(PostgreSQL 16+\nSchema: 13 Tables, Check Constraints,\nRow-Level Pessimistic Locking)]
+        Services -->|SQLAlchemy 2.x ACID Operations| Postgres
+    end
+
+    %% Closed Loop Verification & Telemetry
+    VerifService -->|Independent Verification Audit| AgentLoop
+    AgentLoop -->|Audit Events / Trace Logging| Postgres
+    Postgres -.->|Live Telemetry Stream| Frontend
 ```
-novaresolve-agentic-ai/
-├── backend/
-│   ├── .env                       # Local environment variables
-│   ├── requirements.txt           # Pinned Python dependencies
-│   ├── app/
-│   │   ├── main.py                # FastAPI entrypoint, exception handlers & router mounting
-│   │   ├── api/
-│   │   │   └── routes/
-│   │   │       ├── health.py      # GET /api/health
-│   │   │       ├── customers.py   # GET /api/customers/{id}, /by-email/{email}
-│   │   │       ├── orders.py      # GET /api/orders/{order_id}
-│   │   │       ├── shipments.py   # GET /api/shipments/{order_id}
-│   │   │       ├── inventory.py   # GET /api/inventory/{prod}/{wh}, /alternatives
-│   │   │       ├── policies.py    # POST /api/policies/evaluate
-│   │   │       └── resolutions.py # POST /api/refunds, /replacements, /cancellations
-│   │   ├── core/
-│   │   │   ├── config.py          # Pydantic Settings
-│   │   │   └── exceptions.py      # Domain exceptions (ResourceNotFound, Conflict, etc.)
-│   │   ├── db/
-│   │   │   ├── base.py            # DeclarativeBase, UUIDPrimaryKeyMixin, TimestampMixin
-│   │   │   ├── session.py         # Engine, sessionmaker, get_db, check_db_connection
-│   │   │   └── models/            # Separated SQLAlchemy 2.0 domain models (13 tables)
-│   │   ├── schemas/               # Strongly typed Pydantic v2 schemas
-│   │   │   ├── health.py
-│   │   │   ├── customer.py
-│   │   │   ├── order.py
-│   │   │   ├── shipment.py
-│   │   │   ├── inventory.py
-│   │   │   ├── policy.py
-│   │   │   └── resolution.py
-│   │   └── services/              # Pure domain services
-│   │       ├── customer_service.py
-│   │       ├── order_service.py
-│   │       ├── shipment_service.py
-│   │       ├── inventory_service.py
-│   │       ├── policy_service.py
-│   │       ├── refund_service.py
-│   │       ├── replacement_service.py
-│   │       ├── cancellation_service.py
-│   │       ├── case_service.py
-│   │       └── verification_service.py
-│   └── tests/                     # Automated Pytest test suite (88 passing tests)
-│       ├── conftest.py
-│       ├── test_health.py
-│       ├── test_models.py
-│       ├── test_seed_scenarios.py
-│       ├── test_services_read.py
-│       ├── test_services_resolution.py
-│       ├── test_api_endpoints.py
-│       └── test_agent_tools.py
-├── db/
-│   ├── migrations/
-│   │   ├── 001_initial_schema.sql
-│   │   ├── 002_add_replacement_quantity.sql
-│   │   ├── env.py
-│   │   └── versions/
-│   │       ├── 0001_initial_schema.py
-│   │       └── 0002_add_replacement_quantity.py
-│   └── seed/
-│       ├── scenarios.py           # Definitions for 10 deliberate agentic scenarios
-│       └── seed_data.py           # Deterministic database seeding script
-├── agents/                        # Agent capability layer (Phase 3)
-│   ├── __init__.py
-│   ├── README.md
-│   └── tools/
-│       ├── __init__.py
-│       ├── base.py                # BaseTool, ToolResult, ToolContext, ToolResultStatus
-│       ├── customer_tools.py      # get_customer
-│       ├── order_tools.py         # get_order
-│       ├── shipment_tools.py      # get_shipment
-│       ├── inventory_tools.py     # check_inventory, search_alternative_inventory
-│       ├── policy_tools.py        # evaluate_policy
-│       ├── resolution_tools.py    # create_refund, create_replacement, cancel_order
-│       ├── case_tools.py          # get_case_state, persist_case_state, log_agent_event, verify_resolution
-│       └── registry.py            # TOOL_REGISTRY & execution boundary
-├── frontend/                      # Future Next.js resolution dashboard (scroll-craft)
-├── alembic.ini                    # Alembic configuration
-├── requirements.txt               # Root dependency entrypoint
-├── .env.example                   # Example environment file
-└── README.md
-```
+
+---
+
+## Core Capabilities & Cool Features
+
+### 1. Autonomous Investigation & Goal Pursuit
+- Given a plain-text customer issue, the agent independently reads customer profiles, inspects order histories, checks carrier delivery telemetry, and identifies the core resolution goal.
+- Never relies on client-provided assumptions; pulls authoritative data directly from backend domain services.
+
+### 2. Adaptive Replanning on Constraint
+- When attempting a replacement order, if the primary warehouse has 0 units available, the agent:
+  1. Detects and logs `CONSTRAINT_DETECTED`.
+  2. Enters `REPLANNING` state.
+  3. Invokes `search_alternative_inventory` across all active enterprise hubs.
+  4. Selects an alternative warehouse (e.g. Reno West Warehouse with 15 units available).
+  5. Executes fulfillment from the alternative warehouse and verifies the stock reservation.
+
+### 3. Financial Safety & Human Approval Gate
+- Automatically computes transaction risk based on amount, customer tier, and policy constraints.
+- Any refund exceeding **$100.00** triggers `APPROVAL_REQUIRED`.
+- The agent halts execution *before* any state-changing mutation, serializing state into `awaiting_approval`.
+- Once a human supervisor clicks **Approve** in the dashboard, the agent automatically resumes, executes the refund, and independently audits the database.
+
+### 4. Independent State Verification
+- **Action Success != Verified Resolution**: Just because an API returns `200 OK` doesn't mean the customer's issue was resolved correctly.
+- NovaResolve invokes an independent `VerificationService` that queries PostgreSQL to verify:
+  - Refund record exists with exact expected amount and status `completed`.
+  - Replacement record exists with matching product ID, quantity, and reserved stock.
+  - If a state discrepancy is detected (e.g. simulated $79.99 refund on $159.98 order), verification fails and the case is flagged.
+
+### 5. Multi-Persona Experience
+- **Resolution Manager**: High-level operational overview, approval queues, aggregate velocity metrics.
+- **Dispute Specialist**: Priority queue of escalated cases, conflict traces, and carrier mismatch disputes.
+- **Customer View**: Transparent real-time progress tracker explaining exactly what the agent is investigating and fulfilling.
+
+### 6. Modern Scroll & Focus Aesthetics
+- Built with custom dark/light themes, smooth micro-transitions, responsive layouts, and a dedicated **Spotlight Focus Mode** (`F` key) for distraction-free case handling.
+
+---
+
+## Live Demo Walkthrough
+
+The repository includes 10 pre-seeded, deterministic scenarios (`db/seed/scenarios.py`) demonstrating autonomous agent behavior:
+
+### Scenario 1: Normal Instant Resolution (Alice)
+- **Goal**: Customer received defective headphones ($45.00); requests direct refund.
+- **Flow**: `get_customer` → `get_order` → `get_shipment` → `evaluate_policy` (allowed, low risk) → `create_refund` → `verify_resolution` → **RESOLVED**.
+
+### Scenario 2: Adaptive Replacement & Alternate Warehouse (Bob) — *Primary Demo*
+- **Goal**: Customer's monitor arrived broken; requests replacement.
+- **Primary Fulfillment Hub**: Dallas Central Warehouse has **0 units**.
+- **Agent Adaptation**:
+  1. Agent calls `check_inventory` for Dallas → `available_quantity: 0`.
+  2. Agent logs `CONSTRAINT_DETECTED` and enters `REPLANNING`.
+  3. Agent calls `search_alternative_inventory` → discovers Reno West Warehouse has **15 units**.
+  4. Agent calls `create_replacement` routing to Reno West Warehouse.
+  5. `verify_resolution` confirms replacement record and inventory reservation.
+  6. Case marked **RESOLVED**.
+
+### Scenario 3: High-Risk Refund with Human Approval Gate (Diana)
+- **Goal**: High-value smart projector ($520.00) return requested.
+- **Flow**: Policy evaluation flags `requires_approval: true` (amount exceeds $100.00 threshold) → Case pauses in `awaiting_approval` status (zero DB mutations) → Supervisor reviews case in dashboard and clicks **Approve** → Agent resumes via `/api/agent/resume` → `create_refund` executes → `verify_resolution` confirms → Case marked **RESOLVED**.
+
+### Scenario 4: Policy Denial & Shipped Cancellation Conflict (Hannah)
+- **Goal**: Customer requests cancellation on an order already dispatched with UPS tracking.
+- **Flow**: Agent calls `cancel_order` → Backend rejects with `409 Conflict (OrderStateConflictError)` → Agent avoids blind retry loops, logs constraint, and guides customer to return workflow upon delivery.
+
+---
+
+## REST API Endpoints Reference
+
+### Agent Runtime Endpoints
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/agent/cases` | Lists all resolution cases with customer, order, and telemetry details |
+| `GET` | `/api/agent/cases/{case_id}` | Retrieves specific case details and current resolution status |
+| `GET` | `/api/agent/case/{case_id}/trace` | Retrieves full audit event execution trace for a case |
+| `POST` | `/api/agent/run` | Triggers the autonomous agent runtime on a customer case |
+| `POST` | `/api/agent/resume` | Resumes an `awaiting_approval` case after human supervisor review |
+
+### Information & Read Services
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/health` | PostgreSQL connectivity, query latency, and connection pool status |
+| `GET` | `/api/customers/{customer_id}` | Fetch customer profile by UUID |
+| `GET` | `/api/customers/by-email/{email}` | Fetch customer profile by email |
+| `GET` | `/api/orders/{order_id}` | Fetch order with items and customer ownership |
+| `GET` | `/api/shipments/{order_id}` | Fetch shipment tracking, carrier, and dynamic delivery status |
+| `GET` | `/api/inventory/{product_id}/{warehouse_id}` | Exact stock check (observable zero-stock) |
+| `GET` | `/api/inventory/{product_id}/alternatives` | Discover active alternative warehouses with available stock |
+
+### Policy & State-Changing Resolution Services
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/policies/evaluate` | Pure policy evaluation (zero mutation) |
+| `POST` | `/api/refunds` | Process transactional refund (pessimistic lock, threshold gate) |
+| `POST` | `/api/replacements` | Create replacement order (atomic stock reservation, 409 if 0 stock) |
+| `POST` | `/api/cancellations` | Cancel order (409 conflict if already in transit) |
 
 ---
 
 ## Local Setup Runbook
 
 ### 1. Prerequisites
-- Python 3.12+
-- PostgreSQL 16+ running locally on port 5432
+- **Python 3.12+**
+- **Node.js 18+**
+- **PostgreSQL 16+** running locally on port 5432
 
 ### 2. Virtual Environment & Dependencies
 ```powershell
-# Create virtual environment inside backend/
+# Create and activate Python virtual environment
 python -m venv backend/.venv
-
-# Activate virtual environment
 .\backend\.venv\Scripts\Activate.ps1
 
-# Install dependencies
+# Install backend dependencies
 pip install -r requirements.txt
 ```
 
 ### 3. Environment Configuration
-Create a `.env` file in `backend/` (or copy from `.env.example`):
+Create a `.env` file in the root directory (or in `backend/`):
 ```ini
 PROJECT_NAME="NovaResolve"
 ENVIRONMENT="development"
 DEBUG=True
-DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/novacart
+DATABASE_URL="postgresql+psycopg://postgres:postgres@localhost:5432/novacart"
 API_V1_STR="/api"
 PORT=8000
 HOST="127.0.0.1"
+
+# Google Gemini LLM Configuration (Optional: fallback to deterministic if empty)
+LLM_PROVIDER="gemini"
+LLM_MODEL="gemini-2.0-flash"
+GEMINI_API_KEY="your_actual_gemini_api_key_here"
+LLM_FALLBACK_TO_DETERMINISTIC=True
+LLM_TIMEOUT_SECONDS=15
 ```
 
-### 4. Create Database & Apply Migrations
+### 4. Initialize Database & Seed Deterministic Scenarios
 ```powershell
-# In PostgreSQL, create the novacart database
+# In PostgreSQL, create the database
 psql -U postgres -h localhost -c "CREATE DATABASE novacart;"
 
-# Apply the native Alembic migrations
+# Apply Alembic schema migrations
 $env:PYTHONPATH="."
 .\backend\.venv\Scripts\alembic.exe upgrade head
-```
 
-### 5. Seed Synthetic Data & Scenarios
-```powershell
-# Run the deterministic seed script
+# Seed synthetic data and 10 agentic scenarios
 python -m db.seed.seed_data
 ```
 
----
+### 5. Running Backend & Frontend
 
-## Running the Application
-
-Start the FastAPI application:
+**Terminal 1 — Backend FastAPI Service:**
 ```powershell
-.\backend\.venv\Scripts\uvicorn.exe backend.app.main:app --host 127.0.0.1 --port 8000 --reload
+python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
+*Backend runs at: [http://127.0.0.1:8000](http://127.0.0.1:8000) (Swagger docs at `/docs`)*
 
-- **Interactive Swagger Docs**: `http://127.0.0.1:8000/docs`
-- **ReDoc Documentation**: `http://127.0.0.1:8000/redoc`
+**Terminal 2 — Frontend Application:**
+```powershell
+cd frontend
+node server.mjs
+```
+*Frontend runs at: [http://127.0.0.1:3000](http://127.0.0.1:3000) (transparently reverse-proxies `/api/*` to `:8000`)*
 
 ---
 
 ## Running Automated Tests
 
-Run the complete Pytest test suite (130 passing tests):
+NovaResolve includes a test suite with **136 automated tests** covering all domain models, services, tools, agent loop, LLM decision making, and end-to-end integration scenarios:
+
 ```powershell
+# Run the complete test suite
 $env:PYTHONPATH="."
-.\backend\.venv\Scripts\pytest.exe backend/tests -v
+pytest backend/tests/ -v
 ```
 
-All 130 tests execute in ~28 seconds and verify:
-- System health and PostgreSQL connectivity latency
-- All 13 SQLAlchemy models and check constraints
-- Seed scenario integrity across 10 deliberate customer problems
-- Customer, Order, Shipment, and Inventory read services
-- Zero-stock inventory observable constraint preservation
-- Alternative warehouse discovery
-- Priority-based policy evaluation
-- Transactional state-changing resolutions (Refunds, Replacements, Cancellations)
-- Concurrent stock reservation with pessimistic locking
-- FastAPI REST endpoints HTTP status code mappings (200, 201, 400, 403, 404, 409)
-- Phase 3 tool contracts and Pydantic parameter schemas
-- Phase 4 deterministic agent runtime loop, replanning, and verification
-- Phase 5 LLM decision making (22 tests covering investigation, actions, RiskEvaluator gates, policy denial, unknown intent, loop limits, zero inventory adaptation, multi-case isolation, secret protection, error fallback, DecisionProviderFactory, and direct DecisionProvider loop delegation)
+### Test Suite Breakdown
+| Test Module | Coverage Area | Tests | Status |
+|---|---|:---:|:---:|
+| `test_health.py` | PostgreSQL connection latency & pool health | 3 | **PASS** |
+| `test_models.py` | 13 SQLAlchemy models & check constraints | 8 | **PASS** |
+| `test_seed_scenarios.py` | 10 pre-seeded scenario state validations | 10 | **PASS** |
+| `test_services_read.py` | Customer, Order, Shipment, Inventory read services | 6 | **PASS** |
+| `test_services_resolution.py` | Transactional Refunds, Replacements, Cancellations | 11 | **PASS** |
+| `test_api_endpoints.py` | FastAPI REST HTTP status mappings (200, 201, 400, 404, 409) | 7 | **PASS** |
+| `test_agent_tools.py` | 13 Sandboxed typed tool contracts & schema checks | 48 | **PASS** |
+| `test_agent_runtime.py` | Deterministic agent loop, bounds, replanning, verification | 15 | **PASS** |
+| `test_agent_llm.py` | LLM decision provider, function calling, fallback, safety gates | 22 | **PASS** |
+| `test_e2e_integration.py` | 6 Mandatory End-to-End integration scenarios | 6 | **PASS** |
+| **TOTAL** | **Full System Verification** | **136** | **100% PASS** |
 
 ---
 
-## Live Google Gemini Smoke Test (Phase 5)
+## Deployment Guide
 
-To run a live test using Google Gemini:
+### Deploying to Production (e.g. Render / Railway / Docker)
 
-1. Obtain a free API key at [Google AI Studio](https://aistudio.google.com/).
-2. Add your key to `.env`:
-   ```ini
-   LLM_PROVIDER=gemini
-   LLM_MODEL=gemini-3.7-flash
-   GEMINI_API_KEY=your_actual_gemini_api_key
-   LLM_FALLBACK_TO_DETERMINISTIC=True
-   LLM_TIMEOUT_SECONDS=15
+1. **Database**: Provision a managed PostgreSQL instance (e.g. Supabase, Neon, AWS RDS, Railway Postgres).
+2. **Environment Variables**:
+   ```env
+   DATABASE_URL=postgresql+psycopg://<user>:<password>@<host>:5432/<dbname>
+   GEMINI_API_KEY=<your_production_gemini_key>
+   ENVIRONMENT=production
+   DEBUG=False
    ```
-3. Run the live smoke test script:
-   ```powershell
-   python scripts/smoke_test_gemini.py
+3. **Backend Service Command**:
+   ```bash
+   alembic upgrade head && python -m db.seed.seed_data && uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
    ```
-4. Observe live LLM reasoning, structured tool selection, backend execution, and verified resolution trace.
+4. **Frontend Static/Proxy Service**:
+   ```bash
+   cd frontend && node server.mjs
+   ```
+
+---
+
+## Project Structure
+
+```
+novaresolve-agentic-ai/
+├── backend/
+│   ├── app/
+│   │   ├── api/routes/          # FastAPI route controllers (/agent, /health, /refunds, etc.)
+│   │   ├── core/                # App configuration, security, domain exceptions
+│   │   ├── db/models/           # 13 SQLAlchemy 2.0 ORM models (ACID & row locks)
+│   │   ├── schemas/             # Typed Pydantic v2 validation contracts
+│   │   └── services/            # Pure domain services (Refund, Replacement, Policy, etc.)
+│   └── tests/                   # 136 automated Pytest tests
+├── agents/
+│   ├── planning/                # DecisionProvider, LLMDecisionProvider, DeterministicProvider
+│   │   └── llm/                 # GeminiClient, structured function calling, prompt templates
+│   ├── replanning/              # AgentReplanner (zero-stock & constraint adaptation)
+│   ├── risk/                    # RiskEvaluator (approval threshold gates)
+│   ├── runtime/                 # NovaResolveAgent execution loop & limits
+│   ├── state/                   # AgentState, StateManager, AgentObservation, audit trail
+│   └── tools/                   # Central TOOL_REGISTRY & 13 sandboxed tools
+├── frontend/
+│   ├── components/
+│   │   ├── navigation/          # Sidebar & routing
+│   │   ├── users/               # Multi-persona control room & preference modals
+│   │   ├── metrics/             # Live KPI counter cards
+│   │   ├── case-panel/          # Authoritative agent focus card & fulfillment route map
+│   │   ├── verification/        # Step-by-step execution trace & verification views
+│   │   ├── approvals/           # Human oversight review cards & policy safeguard panel
+│   │   └── case-queue/          # Filterable resolution case table
+│   ├── styles/                  # Clean global design system & keyframe animations
+│   ├── app.js                   # Application state machine & live REST API connector
+│   └── server.mjs               # Zero-dependency ES module server & /api reverse proxy
+├── db/
+│   ├── migrations/              # Alembic database migration revisions
+│   └── seed/                    # Deterministic seed generator & 10 agentic scenarios
+├── docs/screenshots/            # Presentation-grade screenshots of the live system
+├── GEMINI.md                    # Project rules & persistent frontend standards
+└── README.md                    # System documentation & architectural reference
+```
+
+---
+
+## License
+
+Developed for the **NovaResolve Agentic AI Hackathon Project** by Nikhil Lakra. All rights reserved.

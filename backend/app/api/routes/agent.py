@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.db.session import get_db
 from backend.app.db.models.agent_event import AgentEvent
+from backend.app.db.models.case import Case
 from agents.runtime.agent import NovaResolveAgent
 from agents.state.models import AgentRunResult
 
@@ -92,3 +93,72 @@ def get_case_trace(case_id: uuid.UUID, db: Session = Depends(get_db)):
         }
         for e in events
     ]
+
+
+@router.get("/cases", summary="List Resolution Cases")
+def list_cases(db: Session = Depends(get_db)):
+    """Retrieves all cases with related customer, order, and resolution details."""
+    cases = db.query(Case).order_by(Case.created_at.desc()).all()
+    results = []
+    for c in cases:
+        order_total = float(c.order.total_amount) if (c.order and c.order.total_amount) else 0.0
+        product_name = (
+            c.order.items[0].product.name
+            if (c.order and c.order.items and c.order.items[0].product)
+            else "General Product"
+        )
+        results.append({
+            "id": str(c.id),
+            "customer_id": str(c.customer_id),
+            "customer_name": c.customer.name if c.customer else "Unknown Customer",
+            "customer_email": c.customer.email if c.customer else "",
+            "order_id": str(c.order_id) if c.order_id else None,
+            "product_name": product_name,
+            "order_amount": order_total,
+            "issue_type": c.issue_type,
+            "customer_goal": c.customer_goal,
+            "status": c.status,
+            "risk_level": c.risk_level,
+            "current_plan": c.current_plan or [],
+            "current_step": c.current_step,
+            "resolution_type": c.resolution_type,
+            "resolution_status": c.resolution_status,
+            "requires_approval": c.requires_approval,
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+            "updated_at": c.updated_at.isoformat() if c.updated_at else None,
+        })
+    return results
+
+
+@router.get("/cases/{case_id}", summary="Get Case Details")
+def get_case(case_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Retrieves specific case by ID."""
+    c = db.query(Case).filter(Case.id == case_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found")
+    order_total = float(c.order.total_amount) if (c.order and c.order.total_amount) else 0.0
+    product_name = (
+        c.order.items[0].product.name
+        if (c.order and c.order.items and c.order.items[0].product)
+        else "General Product"
+    )
+    return {
+        "id": str(c.id),
+        "customer_id": str(c.customer_id),
+        "customer_name": c.customer.name if c.customer else "Unknown Customer",
+        "customer_email": c.customer.email if c.customer else "",
+        "order_id": str(c.order_id) if c.order_id else None,
+        "product_name": product_name,
+        "order_amount": order_total,
+        "issue_type": c.issue_type,
+        "customer_goal": c.customer_goal,
+        "status": c.status,
+        "risk_level": c.risk_level,
+        "current_plan": c.current_plan or [],
+        "current_step": c.current_step,
+        "resolution_type": c.resolution_type,
+        "resolution_status": c.resolution_status,
+        "requires_approval": c.requires_approval,
+        "created_at": c.created_at.isoformat() if c.created_at else None,
+        "updated_at": c.updated_at.isoformat() if c.updated_at else None,
+    }

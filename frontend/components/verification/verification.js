@@ -1,6 +1,61 @@
 /* Verification Component Logic: Trace, Evidence & Verification Views */
 
 export function getCaseSteps(c, isPlaying, moneyHelper, activePersonaName) {
+  if (c.realTrace && Array.isArray(c.realTrace) && c.realTrace.length > 0) {
+    return c.realTrace.map((event, i) => {
+      const tool = event.tool_name || event.action || 'system';
+      const status = (event.observation_status || event.status || 'success').toLowerCase();
+      const rawType = (event.event_type || tool).toUpperCase().replace(/_/g, ' ');
+
+      const titles = {
+        get_customer: 'Customer profile retrieved',
+        get_order: 'Authoritative order inspected',
+        get_shipment: 'Carrier tracking & shipment verified',
+        evaluate_policy: 'Enterprise policy evaluated',
+        check_inventory: 'Warehouse inventory verified',
+        search_alternative_inventory: 'Alternative inventory searched',
+        create_replacement: 'Replacement order created',
+        create_refund: 'Refund transaction initiated',
+        cancel_order: 'Order cancellation executed',
+        verify_resolution: 'Post-action outcome verified',
+        GOAL_IDENTIFIED: 'Customer resolution goal identified',
+        POLICY_CHECK: 'Policy compliance check',
+        CONSTRAINT_DETECTED: 'Operational constraint detected',
+        REPLAN_STARTED: 'Replanning sequence started',
+        REPLAN_COMPLETED: 'Alternative plan synthesized',
+        APPROVAL_REQUIRED: 'Human approval gate triggered',
+        APPROVAL_GRANTED: 'Supervisor approval recorded',
+        APPROVAL_REJECTED: 'Supervisor rejection recorded',
+        VERIFICATION_STARTED: 'Verification audit started',
+        VERIFICATION_FAILED: 'Verification discrepancy detected',
+      };
+
+      const title = titles[tool] || titles[event.event_type] || rawType;
+      const detail = event.rationale || event.message || `Executed ${tool}`;
+      const evidence = event.observation_message || event.message || (event.parameters ? JSON.stringify(event.parameters) : 'Authoritative state verified.');
+
+      let state = 'completed';
+      if (['failed', 'error', 'rejected'].includes(status) || event.event_type === 'VERIFICATION_FAILED') {
+        state = 'failed';
+      } else if (['blocked', 'insufficient_inventory', 'approval_required'].includes(status) || event.event_type === 'CONSTRAINT_DETECTED' || event.event_type === 'APPROVAL_REQUIRED') {
+        state = 'warning';
+      } else if (tool === 'verify_resolution' && ['success', 'completed'].includes(status)) {
+        state = 'verified';
+      }
+
+      const duration = event.decision_source || event.source || (event.created_at ? new Date(event.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Verified');
+
+      return {
+        title,
+        detail,
+        tool,
+        evidence,
+        duration,
+        state
+      };
+    });
+  }
+
   if (c.id === 'NR-1024') {
     const entries = [
       ['Customer identified', 'Customer and account information retrieved', 'get_customer', 'Account matched to Rahul Sharma. Customer identity confirmed.', '0.2s'],

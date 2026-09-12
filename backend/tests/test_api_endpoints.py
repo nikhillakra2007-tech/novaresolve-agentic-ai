@@ -10,6 +10,7 @@ from backend.app.db.models import (
     Product,
     Warehouse,
     Shipment,
+    Inventory,
 )
 
 
@@ -217,6 +218,14 @@ def test_api_resolutions_replacement_and_cancellation(client: TestClient, db_ses
     assert res_rep_fail.json()["error"] == "InsufficientInventoryError"
 
     # 2. Successful replacement from Reno with quantity=2
+    reno_inv = db_session.query(Inventory).filter(
+        Inventory.product_id == product.id,
+        Inventory.warehouse_id == reno.id,
+    ).first()
+    if reno_inv:
+        reno_inv.reserved_quantity = 0
+        db_session.commit()
+
     rep_payload_success = {
         "order_id": str(order.id),
         "product_id": str(product.id),

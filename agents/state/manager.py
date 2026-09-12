@@ -28,6 +28,20 @@ class StateManager:
             "pending" if case.requires_approval and case.status == "awaiting_approval" else "not_required"
         )
 
+        # Normalize plan steps to List[Dict[str, Any]]
+        raw_plan = case.current_plan if isinstance(case.current_plan, list) else []
+        normalized_plan = []
+        for idx, item in enumerate(raw_plan):
+            if isinstance(item, dict):
+                normalized_plan.append(item)
+            elif isinstance(item, str):
+                normalized_plan.append({
+                    "step_number": idx + 1,
+                    "tool_name": item,
+                    "description": item,
+                    "status": "pending",
+                })
+
         # Initialize base state from persisted case
         state = AgentState(
             case_id=case.id,
@@ -36,7 +50,7 @@ class StateManager:
             customer_goal=case.customer_goal,
             issue_type=case.issue_type,
             current_status=case.status,
-            current_plan=case.current_plan if isinstance(case.current_plan, list) else [],
+            current_plan=normalized_plan,
             current_step=case.current_step,
             risk_level=case.risk_level,
             requires_approval=case.requires_approval,

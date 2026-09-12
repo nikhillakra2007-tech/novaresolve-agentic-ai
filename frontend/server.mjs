@@ -22,6 +22,31 @@ const server = http.createServer(async (request, response) => {
   try {
     const parsedUrl = new URL(request.url, 'http://localhost');
     let pathname = decodeURIComponent(parsedUrl.pathname);
+
+    // Reverse proxy API requests to backend on port 8000
+    if (pathname.startsWith('/api/')) {
+      const proxyHeaders = { ...request.headers, host: '127.0.0.1:8000' };
+      const proxyReq = http.request(
+        {
+          host: '127.0.0.1',
+          port: 8000,
+          path: request.url,
+          method: request.method,
+          headers: proxyHeaders,
+        },
+        (proxyRes) => {
+          response.writeHead(proxyRes.statusCode, proxyRes.headers);
+          proxyRes.pipe(response);
+        }
+      );
+      proxyReq.on('error', (err) => {
+        response.writeHead(502, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify({ error: 'Bad Gateway', message: err.message }));
+      });
+      request.pipe(proxyReq);
+      return;
+    }
+
     if (pathname === '/' || pathname === '') {
       pathname = '/index.html';
     }

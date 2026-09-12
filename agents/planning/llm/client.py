@@ -18,7 +18,7 @@ class GeminiClient:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model_name: str = "gemini-3.7-flash",
+        model_name: str = "gemini-2.0-flash",
         timeout_seconds: int = 15,
     ) -> None:
         self.api_key = api_key
