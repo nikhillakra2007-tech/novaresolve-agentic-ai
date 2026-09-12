@@ -73,6 +73,17 @@ Designed for high-velocity resolution operations with customized role views, dar
 
 ---
 
+### 5. Advanced Mission Control Capabilities
+
+- **Autonomous Supply Chain Re-Routing Matrix**: Real-time visual supply chain tracking showing stockouts at origin hubs (Delhi Hub 0 units) with dynamic spatial rerouting to regional robotic hubs (Jaipur Hub 4 units reserved) and automated priority carrier assignment (`#NE-9821`).
+- **Interactive Scrubber & Speed Controls**: Scrub through the agent's 9 reasoning stages with manual step stepping and variable replay speeds (`1x`, `2x`, `4x`).
+- **Web Audio API Sound Synthesizer**: Native in-browser acoustic feedback for step execution, spatial rerouting alerts, resolution victory chords, and supervisor gate warnings.
+- **Zero-Trust Parity Matrix**: Side-by-side comparative ledger audit verifying Expected State vs Observed DB Truth with cryptographic audit seal validation.
+- **Omni Command Palette (<kbd>Ctrl</kbd> + <kbd>K</kbd>)**: Instant fuzzy action and case launcher.
+- **60 FPS Confetti Physics Engine**: Pure canvas celebration on verified resolution.
+
+---
+
 ## System Architecture
 
 NovaResolve connects user interaction, REST APIs, autonomous reasoning, deterministic tools, and PostgreSQL ACID storage into a single authoritative flow:

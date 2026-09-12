@@ -1,4 +1,4 @@
-/* NovaResolve Core Application Controller */
+/* NovaResolve Core Application Controller — Next-Gen Autonomous Resolution Center */
 
 import { renderSidebarHtml, syncSidebarActive } from './components/navigation/navigation.js';
 import { PERSONAS, renderPersonaPopover, renderPreferencesModal } from './components/users/users.js';
@@ -7,6 +7,9 @@ import { renderCasePanelHtml } from './components/case-panel/case-panel.js';
 import { getCaseSteps, renderTraceHtml, renderEvidenceHtml, renderVerificationHtml } from './components/verification/verification.js';
 import { renderApprovalPanel, renderContextPanel, renderCustomerSidePanel } from './components/approvals/approvals.js';
 import { renderCaseQueueHtml } from './components/case-queue/case-queue.js';
+import { renderCommandPaletteHtml } from './components/command-palette/command-palette.js';
+import { sound } from './sound.js';
+import { triggerCyberConfetti } from './components/confetti.js';
 
 // SVG Icon Paths Registry
 const paths = {
@@ -43,7 +46,9 @@ const paths = {
   lock: 'M5 10h14v11H5z M8 10V6a4 4 0 0 1 8 0v4',
   sun: 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z',
   moon: 'M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z',
-  focus: 'M12 2a10 10 0 1010 10A10 10 0 0012 2zm0 15a5 5 0 115-5 5 5 0 01-5 5zm0-3a2 2 0 102-2 2 2 0 00-2 2z'
+  focus: 'M12 2a10 10 0 1010 10A10 10 0 0012 2zm0 15a5 5 0 115-5 5 5 0 01-5 5zm0-3a2 2 0 102-2 2 2 0 00-2 2z',
+  volume: 'M11 5L6 9H2v6h4l5 4V5z M19.07 4.93a10 10 0 0 1 0 14.14 M15.54 8.46a5 5 0 0 1 0 7.07',
+  mute: 'M11 5L6 9H2v6h4l5 4V5z M23 9l-6 6 M17 9l6 6'
 };
 
 const icon = (name, cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name] || paths.file}"/></svg>`;
@@ -80,29 +85,45 @@ let activePersona = 'manager';
 let autonomousThreshold = 100;
 let autoRerouteEnabled = true;
 let focusMode = false;
-let currentTheme = localStorage.getItem('novaresolve-theme') || 'light';
+let currentTheme = localStorage.getItem('novaresolve-theme') || 'dark';
 document.documentElement.setAttribute('data-theme', currentTheme);
 
 function createDemoCases() {
   return [
-    { id: 'NR-1024', customer: 'Rahul Sharma', email: 'rahul.sharma@example.com', issue: 'Damaged product', goal: 'Damaged product · replacement requested', status: 'Replanning', risk: 'Low', resolution: 'Replacement', amount: 3499, order: 'NC-48391', product: 'NovaSound wireless headphones', warehouse: 'Delhi', alternate: 'Jaipur', stock: 4, updated: now - 32000, tone: '', reason: 'Original fulfillment warehouse has no available inventory.', recommendation: 'Route the replacement through an alternative warehouse.', verified: false, stage: 5 },
-    { id: 'NR-1025', customer: 'Priya Mehta', email: 'priya.mehta@example.com', issue: 'Refund requested', goal: 'Return received · refund requested', status: 'Awaiting Approval', risk: 'High', resolution: 'Refund', amount: 12450, order: 'NC-48386', product: 'NovaView 27-inch monitor', updated: now - 120000, tone: 'mauve', reason: `Refund amount exceeds the ${money(autonomousThreshold)} autonomous approval threshold.`, recommendation: 'Approve the full refund. The returned item has been received and inspected.', verified: false },
-    { id: 'NR-1035', customer: 'Diya Nair', email: 'diya.nair@example.com', issue: 'Refund requested', goal: 'Return received · refund requested', status: 'Awaiting Approval', risk: 'High', resolution: 'Refund', amount: 18990, order: 'NC-48355', product: 'NovaClean robot vacuum', updated: now - 420000, tone: '', reason: `Refund amount exceeds the ${money(autonomousThreshold)} autonomous approval threshold.`, recommendation: 'Approve the refund. Return eligibility and receipt have been confirmed.', verified: false },
-    { id: 'NR-1026', customer: 'Aman Verma', email: 'aman.verma@example.com', issue: 'Order cancellation', goal: 'Cancel order before dispatch', status: 'Investigating', risk: 'Low', resolution: 'Cancellation', amount: 2199, order: 'NC-48394', product: 'NovaCharge charging station', updated: now - 180000, tone: 'blue', reason: 'Checking the shipment state before confirming cancellation.', recommendation: 'Inspect dispatch status and cancellation policy.', verified: false },
-    { id: 'NR-1027', customer: 'Sneha Patel', email: 'sneha.patel@example.com', issue: 'Missing item', goal: 'Missing item · replacement requested', status: 'Executing', risk: 'Low', resolution: 'Replacement', amount: 1499, order: 'NC-48374', product: 'NovaFit activity band', warehouse: 'Mumbai', updated: now - 300000, tone: 'sand', reason: 'Replacement approved. Reserving one unit at the Mumbai warehouse.', recommendation: 'Create the replacement and verify the reservation.', verified: false },
-    { id: 'NR-1028', customer: 'Arjun Reddy', email: 'arjun.reddy@example.com', issue: 'Delivery dispute', goal: 'Delivered parcel not received', status: 'Escalated', risk: 'Medium', resolution: 'Manual review', amount: 7999, order: 'NC-48361', product: 'NovaTab tablet', updated: now - 540000, tone: 'blue', reason: 'Carrier delivery evidence conflicts with the customer report.', recommendation: 'A resolution specialist must review proof of delivery.', verified: false },
-    { id: 'NR-1029', customer: 'Ananya Iyer', email: 'ananya.iyer@example.com', issue: 'Refund requested', goal: 'Return accepted · refund completed', status: 'Resolved', risk: 'Low', resolution: 'Refund', amount: 2499, order: 'NC-48343', product: 'NovaKeys keyboard', updated: now - 720000, tone: 'mauve', reason: 'Refund completed and verified against the payment record.', recommendation: 'No further action required.', verified: true },
-    { id: 'NR-1030', customer: 'Vikram Singh', email: 'vikram.singh@example.com', issue: 'Wrong item received', goal: 'Correct product replacement completed', status: 'Resolved', risk: 'Low', resolution: 'Replacement', amount: 3299, order: 'NC-48334', product: 'NovaSound speaker', updated: now - 1080000, tone: 'sand', reason: 'Replacement and inventory reservation verified.', recommendation: 'No further action required.', verified: true },
-    { id: 'NR-1031', customer: 'Ishita Rao', email: 'ishita.rao@example.com', issue: 'Order cancellation', goal: 'Order cancellation completed', status: 'Resolved', risk: 'Low', resolution: 'Cancellation', amount: 1899, order: 'NC-48322', product: 'NovaLight desk lamp', updated: now - 1620000, tone: '', reason: 'Order cancellation confirmed. Payment reversal verified.', recommendation: 'No further action required.', verified: true },
-    { id: 'NR-1032', customer: 'Rohan Kapoor', email: 'rohan.kapoor@example.com', issue: 'Damaged product', goal: 'Damaged product · refund requested', status: 'Planning', risk: 'Medium', resolution: 'Refund', amount: 6799, order: 'NC-48401', product: 'NovaHome air purifier', updated: now - 240000, tone: 'blue', reason: 'Evidence collected. Comparing eligible resolution options.', recommendation: 'Evaluate the refund against the return policy.', verified: false },
-    { id: 'NR-1034', customer: 'Karan Shah', email: 'karan.shah@example.com', issue: 'Missing accessory', goal: 'Missing accessory · replacement created', status: 'Verifying', risk: 'Low', resolution: 'Replacement', amount: 799, order: 'NC-48389', product: 'NovaCharge USB-C adapter', warehouse: 'Bengaluru', updated: now - 60000, tone: 'sand', reason: 'Replacement created. Checking the reserved quantity and fulfillment record.', recommendation: 'Resolve only after the observed state matches the expected state.', verified: false }
+    { id: 'NR-1024', customer: 'Rahul Sharma', email: 'rahul.sharma@example.com', issue: 'Damaged product', goal: 'Damaged product · replacement requested', status: 'Replanning', risk: 'Low', resolution: 'Replacement', amount: 89.99, order: 'NC-48391', product: 'NovaSound wireless headphones', warehouse: 'Delhi', alternate: 'Jaipur', stock: 4, updated: now - 32000, tone: '', reason: 'Original fulfillment warehouse has 0 available inventory.', recommendation: 'Route the replacement through alternative warehouse in Jaipur.', verified: false, stage: 5 },
+    { id: 'NR-1025', customer: 'Priya Mehta', email: 'priya.mehta@example.com', issue: 'Refund requested', goal: 'Return received · refund requested', status: 'Awaiting Approval', risk: 'High', resolution: 'Refund', amount: 349.50, order: 'NC-48386', product: 'NovaView 27-inch monitor', updated: now - 120000, tone: 'mauve', reason: `Refund amount exceeds the ${money(autonomousThreshold)} autonomous approval threshold.`, recommendation: 'Approve the full refund. Returned item has been received and inspected.', verified: false },
+    { id: 'NR-1035', customer: 'Diya Nair', email: 'diya.nair@example.com', issue: 'Refund requested', goal: 'Return received · refund requested', status: 'Awaiting Approval', risk: 'High', resolution: 'Refund', amount: 499.00, order: 'NC-48355', product: 'NovaClean robot vacuum', updated: now - 420000, tone: '', reason: `Refund amount exceeds the ${money(autonomousThreshold)} autonomous approval threshold.`, recommendation: 'Approve refund. Return eligibility and inspection confirmed.', verified: false },
+    { id: 'NR-1026', customer: 'Aman Verma', email: 'aman.verma@example.com', issue: 'Order cancellation', goal: 'Cancel order before dispatch', status: 'Investigating', risk: 'Low', resolution: 'Cancellation', amount: 49.99, order: 'NC-48394', product: 'NovaCharge charging station', updated: now - 180000, tone: 'blue', reason: 'Checking shipment state before confirming cancellation.', recommendation: 'Inspect dispatch status and cancellation policy.', verified: false },
+    { id: 'NR-1027', customer: 'Sneha Patel', email: 'sneha.patel@example.com', issue: 'Missing item', goal: 'Missing item · replacement requested', status: 'Executing', risk: 'Low', resolution: 'Replacement', amount: 39.99, order: 'NC-48374', product: 'NovaFit activity band', warehouse: 'Mumbai', updated: now - 300000, tone: 'sand', reason: 'Replacement approved. Reserving unit at Mumbai fulfillment hub.', recommendation: 'Create replacement order and verify inventory reservation.', verified: false },
+    { id: 'NR-1028', customer: 'Arjun Reddy', email: 'arjun.reddy@example.com', issue: 'Delivery dispute', goal: 'Delivered parcel not received', status: 'Escalated', risk: 'Medium', resolution: 'Manual review', amount: 199.99, order: 'NC-48361', product: 'NovaTab tablet', updated: now - 540000, tone: 'blue', reason: 'Carrier delivery proof conflicts with customer report.', recommendation: 'Dispute specialist must review photographic proof of delivery.', verified: false },
+    { id: 'NR-1029', customer: 'Ananya Iyer', email: 'ananya.iyer@example.com', issue: 'Refund requested', goal: 'Return accepted · refund completed', status: 'Resolved', risk: 'Low', resolution: 'Refund', amount: 69.99, order: 'NC-48343', product: 'NovaKeys mechanical keyboard', updated: now - 720000, tone: 'mauve', reason: 'Refund completed and verified against Stripe ledger.', recommendation: 'No further action required.', verified: true },
+    { id: 'NR-1030', customer: 'Vikram Singh', email: 'vikram.singh@example.com', issue: 'Wrong item received', goal: 'Correct product replacement completed', status: 'Resolved', risk: 'Low', resolution: 'Replacement', amount: 79.99, order: 'NC-48334', product: 'NovaSound speaker', updated: now - 1080000, tone: 'sand', reason: 'Replacement and inventory reservation verified.', recommendation: 'No further action required.', verified: true },
+    { id: 'NR-1031', customer: 'Ishita Rao', email: 'ishita.rao@example.com', issue: 'Order cancellation', goal: 'Order cancellation completed', status: 'Resolved', risk: 'Low', resolution: 'Cancellation', amount: 44.99, order: 'NC-48322', product: 'NovaLight desk lamp', updated: now - 1620000, tone: '', reason: 'Order cancellation confirmed. Payment reversal verified.', recommendation: 'No further action required.', verified: true },
+    { id: 'NR-1032', customer: 'Rohan Kapoor', email: 'rohan.kapoor@example.com', issue: 'Damaged product', goal: 'Damaged product · refund requested', status: 'Planning', risk: 'Medium', resolution: 'Refund', amount: 159.99, order: 'NC-48401', product: 'NovaHome air purifier', updated: now - 240000, tone: 'blue', reason: 'Evidence collected. Comparing eligible resolution routes.', recommendation: 'Evaluate refund against return policy.', verified: false },
+    { id: 'NR-1034', customer: 'Karan Shah', email: 'karan.shah@example.com', issue: 'Missing accessory', goal: 'Missing accessory · replacement created', status: 'Verifying', risk: 'Low', resolution: 'Replacement', amount: 19.99, order: 'NC-48389', product: 'NovaCharge USB-C adapter', warehouse: 'Bengaluru', updated: now - 60000, tone: 'sand', reason: 'Replacement created. Checking reserved quantity and fulfillment record.', recommendation: 'Resolve only after observed state matches expected state.', verified: false }
   ];
 }
 
 let cases = createDemoCases();
 let isLiveApiConnected = false;
-const state = { view: 'overview', selected: 'NR-1024', tab: 'trace', filter: 'all', risk: 'all', query: '', limit: 6, playing: false, runningCaseId: null, expanded: new Set(), popover: null };
-let replayTimer, toastTimer, burstTimer;
+const state = { 
+  view: 'overview', 
+  selected: 'NR-1024', 
+  tab: 'trace', 
+  filter: 'all', 
+  risk: 'all', 
+  query: '', 
+  limit: 6, 
+  playing: false, 
+  runningCaseId: null, 
+  expanded: new Set(['NR-1024-5', 'NR-1024-6']), 
+  popover: null,
+  replaySpeed: 1,
+  cmdOpen: false,
+  cmdQuery: '',
+  cmdSelectedIndex: 0
+};
+let replayTimer, toastTimer;
 
 const caseById = id => cases.find(c => c.id === id);
 const selected = () => caseById(state.selected) || cases[0];
@@ -169,7 +190,7 @@ async function loadCasesFromApi() {
       }
     }
   } catch (err) {
-    console.warn('Backend API connection note:', err.message);
+    console.warn('Backend API note:', err.message);
   }
 }
 
@@ -192,6 +213,7 @@ async function triggerAgentRun(caseId) {
   const c = caseById(caseId);
   if (!c) return;
   state.runningCaseId = caseId;
+  sound.play('step');
   toast(`Autonomous agent started on case for ${c.customer}...`);
   render();
 
@@ -205,6 +227,7 @@ async function triggerAgentRun(caseId) {
     if (!res.ok) {
       const errData = await res.json().catch(() => ({ detail: 'HTTP error ' + res.status }));
       toast(`Agent error: ${errData.detail || 'Execution error'}`, 'error');
+      sound.play('alert');
       state.runningCaseId = null;
       render();
       return;
@@ -233,6 +256,12 @@ async function triggerAgentRun(caseId) {
       await loadCaseTrace(caseId);
     }
 
+    if (c.verified) {
+      sound.play('success');
+      triggerCyberConfetti();
+    } else {
+      sound.play('step');
+    }
     toast(`Agent completed: ${c.status} (${data.steps_executed} steps, ${data.replans} replans)`);
   } catch (err) {
     toast(`Network failure: ${err.message}`, 'error');
@@ -245,6 +274,7 @@ async function triggerAgentRun(caseId) {
 async function handleApprovalReview(caseId, decision) {
   const c = caseById(caseId);
   if (!c) return;
+  sound.play(decision === 'approve' ? 'click' : 'alert');
   toast(`Submitting ${decision === 'approve' ? 'approval' : 'rejection'} to backend...`);
 
   try {
@@ -281,6 +311,10 @@ async function handleApprovalReview(caseId, decision) {
       } else {
         await loadCaseTrace(caseId);
       }
+      if (c.verified) {
+        sound.play('success');
+        triggerCyberConfetti();
+      }
       toast(`Case resumed: ${c.status}. State verified.`);
     } else {
       const err = await res.json().catch(() => ({ detail: 'HTTP ' + res.status }));
@@ -297,7 +331,7 @@ function renderOverviewView() {
   const p = PERSONAS[activePersona];
   const activeCount = cases.filter(c => !terminal.includes(c.status)).length;
   let subtitle = activePersona === 'manager'
-    ? `${activeCount} cases in motion. ${pending().length} decisions need your attention.`
+    ? `${activeCount} cases in motion. ${pending().length} decisions require supervisor sign-off.`
     : activePersona === 'specialist'
     ? 'Tier-2 Escalations Queue · 3 priority investigations assigned to your desk.'
     : 'Order #NC-48391 · NovaSound wireless headphones · Live autonomous replacement tracking.';
@@ -308,15 +342,15 @@ function renderOverviewView() {
   const replayBtn = `
     <button class="button primary" data-action="${isSelectedUuid ? 'run-agent' : 'replay'}" ${isRunning ? 'disabled' : ''}>
       ${icon(isRunning ? 'refresh' : state.playing ? 'pause' : 'play', isRunning ? 'spinning' : '')}
-      <span>${isRunning ? 'Agent running...' : isSelectedUuid ? 'Run Agent' : state.playing ? 'Pause replay' : 'Replay demo'}</span>
+      <span>${isRunning ? 'Agent running...' : isSelectedUuid ? 'Run Agent' : state.playing ? 'Pause Replay' : 'Replay Demo'}</span>
     </button>
-    <button class="button secondary" data-action="refresh-data" title="Sync latest data from backend" style="padding: 6px 10px;">
-      ${icon('refresh')}
-      <span>Sync API</span>
+    <button class="button secondary" data-action="quick-command" title="Open Command Palette (Ctrl+K)">
+      ${icon('search')}
+      <span>Commands</span>
     </button>
     <span class="demo-tag" style="${isLiveApiConnected ? 'background: rgba(16, 185, 129, 0.12); color: var(--green); border-color: rgba(16, 185, 129, 0.25);' : ''}">
       <span class="dot" style="${isLiveApiConnected ? 'background: var(--green);' : ''}"></span>
-      ${isLiveApiConnected ? 'Live Backend API' : 'Demo data'}
+      ${isLiveApiConnected ? 'Live Backend API' : 'High-Fidelity Demo'}
     </span>
   `;
 
@@ -334,7 +368,7 @@ function renderOverviewView() {
       <span class="right-label">${icon('activity')}${activePersona === 'customer' ? 'Real-time agent routing & verification' : 'Follow the thinking. See the outcome.'}</span>
     </div>
     <div class="work-grid">
-      <div id="case-panel-wrapper">${renderCasePanelHtml(selected(), state.tab, state.playing, focusMode, badge, avatar, icon, esc, tabsHtml)}</div>
+      <div id="case-panel-wrapper">${renderCasePanelHtml(selected(), state.tab, state.playing, focusMode, badge, avatar, icon, esc, tabsHtml, state.replaySpeed)}</div>
       <aside class="side-stack" aria-label="Human oversight">
         ${activePersona === 'customer' ? renderCustomerSidePanel(icon) : `
           ${renderApprovalPanel(pending()[0], pending().length, money, avatar, icon, esc)}
@@ -342,7 +376,7 @@ function renderOverviewView() {
         `}
         <div class="trust-note">
           ${icon('shield')}
-          <span>${activePersona === 'customer' ? 'NovaCart Autonomous Resolution Guarantee: transparent evidence and zero customer fees.' : 'Actions are checked against policy and risk. A case is resolved only after verification.'}</span>
+          <span>${activePersona === 'customer' ? 'NovaCart Autonomous Resolution Guarantee: transparent evidence and zero customer fees.' : 'Actions are verified against enterprise policy. A case is resolved only after zero-trust DB assertion.'}</span>
         </div>
       </aside>
     </div>
@@ -382,9 +416,9 @@ function renderCustomersView() {
     ${renderHeadingHtml('Customer Accounts', 'Customer dispute histories and lifetime loyalty profiles.', p, '', state.view, esc)}
     <div class="approvals-grid">
       ${[
-        { name: 'Rahul Sharma', email: 'rahul.sharma@example.com', orders: 12, tier: 'Gold Loyalty', tone: 'sand' },
-        { name: 'Priya Mehta', email: 'priya.mehta@example.com', orders: 4, tier: 'Standard', tone: 'mauve' },
-        { name: 'Diya Nair', email: 'diya.nair@example.com', orders: 8, tier: 'Platinum Member', tone: '' }
+        { name: 'Rahul Sharma', email: 'rahul.sharma@example.com', orders: 12, tier: 'Gold Loyalty (Score: 98)', tone: 'sand' },
+        { name: 'Priya Mehta', email: 'priya.mehta@example.com', orders: 4, tier: 'Standard (Score: 82)', tone: 'mauve' },
+        { name: 'Diya Nair', email: 'diya.nair@example.com', orders: 8, tier: 'Platinum Member (Score: 94)', tone: '' }
       ].map(cust => `
         <div class="panel" style="padding: 20px;">
           <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px;">
@@ -438,6 +472,19 @@ export function render() {
   // Topbar Updates
   const themeBtn = document.getElementById('theme-button');
   if (themeBtn) themeBtn.innerHTML = icon(currentTheme === 'dark' ? 'sun' : 'moon');
+  
+  const soundBtn = document.getElementById('sound-button');
+  if (soundBtn) {
+    soundBtn.innerHTML = icon(sound.enabled ? 'volume' : 'mute');
+    soundBtn.classList.toggle('active', sound.enabled);
+    soundBtn.classList.toggle('muted', !sound.enabled);
+  }
+
+  const hudThreshold = document.getElementById('hud-threshold');
+  if (hudThreshold) {
+    hudThreshold.textContent = money(autonomousThreshold);
+  }
+
   const focusBtn = document.getElementById('focus-button');
   if (focusBtn) {
     focusBtn.innerHTML = icon('focus');
@@ -470,13 +517,14 @@ export function render() {
   main.innerHTML = (views[state.view] || renderOverviewView)() + `
     <footer class="footer">
       <span class="row">${icon('shield')} NovaResolve · Autonomous customer resolution architecture</span>
-      <span>Demo workspace · Simulated production data</span>
+      <span>Gemini 1.5 Pro Multi-Step Engine · Zero-Trust Independent Assertion Layer</span>
     </footer>
   `;
 }
 
 export function switchPersona(personaKey) {
   if (!PERSONAS[personaKey]) return;
+  sound.play('click');
   activePersona = personaKey;
   const p = PERSONAS[activePersona];
   if (p.defaultCase && caseById(p.defaultCase)) {
@@ -490,6 +538,7 @@ export function switchPersona(personaKey) {
 }
 
 export function toggleFocusMode() {
+  sound.play('click');
   focusMode = !focusMode;
   document.body.classList.toggle('focus-mode-active', focusMode);
   const btn = document.getElementById('focus-button');
@@ -510,17 +559,18 @@ export function toggleFocusMode() {
 }
 
 export function toggleTheme(forced) {
+  sound.play('click');
   currentTheme = forced || (currentTheme === 'dark' ? 'light' : 'dark');
   document.documentElement.setAttribute('data-theme', currentTheme);
   localStorage.setItem('novaresolve-theme', currentTheme);
   render();
-  toast(`Switched to ${currentTheme === 'dark' ? 'Dark' : 'Light'} theme.`);
+  toast(`Switched to ${currentTheme === 'dark' ? 'Cyber Dark' : 'Clean Light'} theme.`);
 }
 
-export function toast(message) {
+export function toast(message, type = 'info') {
   clearTimeout(toastTimer);
   const el = document.getElementById('toast');
-  el.innerHTML = icon('circleCheck') + `<span>${esc(message)}</span>`;
+  el.innerHTML = icon(type === 'error' ? 'warning' : 'circleCheck') + `<span>${esc(message)}</span>`;
   el.hidden = false;
   toastTimer = setTimeout(() => { el.hidden = true; }, 4000);
 }
@@ -538,29 +588,129 @@ export function runReplay() {
   state.playing = !state.playing;
 
   if (state.playing) {
+    sound.play('click');
     c.stage = 0;
     c.status = 'Investigating';
     c.reason = 'Customer identified. Inspecting order NC-48391.';
     render();
     clearInterval(replayTimer);
+
+    const intervalMs = Math.max(280, Math.floor(1200 / (state.replaySpeed || 1)));
+
     replayTimer = setInterval(() => {
       c.stage++;
-      if (c.stage === 4) { c.status = 'Replanning'; c.reason = 'Delhi inventory is 0. Searching alternative warehouse.'; }
-      else if (c.stage === 6) { c.reason = 'Alternative found in Jaipur (4 units). Replanning route.'; }
-      else if (c.stage === 7) { c.status = 'Executing'; c.reason = 'Reserving 1 unit at Jaipur warehouse.'; }
+      if (c.stage === 4) { 
+        c.status = 'Replanning'; 
+        c.reason = 'Delhi warehouse inventory is 0. Searching alternative regional hubs.';
+        sound.play('replan');
+      }
+      else if (c.stage === 6) { 
+        c.reason = 'Alternative found in Jaipur (4 units). Replanning route.'; 
+        sound.play('step');
+      }
+      else if (c.stage === 7) { 
+        c.status = 'Executing'; 
+        c.reason = 'Reserving 1 unit at Jaipur warehouse. Priority tracking assigned.'; 
+        sound.play('step');
+      }
       else if (c.stage >= 8) {
         c.stage = 8;
         c.status = 'Resolved';
         c.verified = true;
-        c.reason = 'Replacement created in Jaipur and verified against inventory record.';
+        c.reason = 'Replacement created in Jaipur and independently verified against DB ledger.';
         state.playing = false;
         clearInterval(replayTimer);
-        toast('Autonomous replanning and independent verification completed.');
+        sound.play('success');
+        triggerCyberConfetti();
+        toast('Autonomous replanning and zero-trust verification completed.');
+      } else {
+        sound.play('step');
       }
       render();
-    }, 1200);
+    }, intervalMs);
   } else {
     clearInterval(replayTimer);
+    render();
+  }
+}
+
+// Command Palette Actions Matrix
+function getCommandItems(q = '') {
+  const query = q.toLowerCase().trim();
+  const baseActions = [
+    { id: 'run-agent', title: 'Run Autonomous Agent', desc: 'Trigger multi-step resolution engine on current case', icon: 'bolt', group: 'Actions', shortcut: '↵' },
+    { id: 'replay', title: 'Replay Replanning Sequence', desc: 'Simulate stockout and dynamic spatial warehouse rerouting', icon: 'refresh', group: 'Actions', shortcut: 'R' },
+    { id: 'toggle-sound', title: `Toggle Audio FX (${sound.enabled ? 'Enabled' : 'Muted'})`, desc: 'Futuristic sound synthesizer via Web Audio API', icon: 'volume', group: 'Preferences' },
+    { id: 'toggle-theme', title: `Toggle Dark / Light Mode (Current: ${currentTheme})`, desc: 'Switch visual design aesthetic', icon: 'sun', group: 'Preferences', shortcut: 'T' },
+    { id: 'toggle-focus', title: 'Toggle Spotlight Focus Mode', desc: 'Dims background for presentation view', icon: 'focus', group: 'Preferences', shortcut: 'F' },
+    { id: 'switch-persona', param: 'manager', title: 'Switch Persona: Alex Morgan', desc: 'Lead Operations Manager · Full Governance & Thresholds', icon: 'users', group: 'Personas' },
+    { id: 'switch-persona', param: 'specialist', title: 'Switch Persona: Priya Sharma', desc: 'Tier-2 Dispute Specialist · Forensics Desk', icon: 'shield', group: 'Personas' },
+    { id: 'switch-persona', param: 'customer', title: 'Switch Persona: Rahul Sharma', desc: 'Customer live tracking portal', icon: 'package', group: 'Personas' },
+    { id: 'refresh-data', title: 'Synchronize Backend API', desc: 'Fetch latest case and trace records from FastAPI backend', icon: 'refresh', group: 'System' }
+  ];
+
+  const caseActions = cases.map(c => ({
+    id: 'select-case',
+    param: c.id,
+    title: `Case ${c.id} · ${c.customer}`,
+    desc: `${c.goal} (${c.status} · ${money(c.amount)})`,
+    icon: 'cases',
+    group: 'Cases'
+  }));
+
+  const all = [...baseActions, ...caseActions];
+  if (!query) return all;
+  return all.filter(item => 
+    item.title.toLowerCase().includes(query) || 
+    (item.desc && item.desc.toLowerCase().includes(query)) ||
+    (item.param && item.param.toLowerCase().includes(query))
+  );
+}
+
+function openCommandPalette() {
+  sound.play('click');
+  state.cmdOpen = true;
+  state.cmdQuery = '';
+  state.cmdSelectedIndex = 0;
+  renderCommandPalette();
+  setTimeout(() => {
+    document.getElementById('cmd-input')?.focus();
+  }, 30);
+}
+
+function closeCommandPalette() {
+  state.cmdOpen = false;
+  document.getElementById('cmd-root').innerHTML = '';
+}
+
+function renderCommandPalette() {
+  if (!state.cmdOpen) return;
+  const items = getCommandItems(state.cmdQuery);
+  document.getElementById('cmd-root').innerHTML = renderCommandPaletteHtml(state.cmdQuery, items, state.cmdSelectedIndex, icon);
+}
+
+function executeCommand(cmdId, param) {
+  closeCommandPalette();
+  if (cmdId === 'run-agent') {
+    if (selected().id && selected().id.includes('-') && selected().id.length > 10) triggerAgentRun(selected().id);
+    else runReplay();
+  }
+  else if (cmdId === 'replay') runReplay();
+  else if (cmdId === 'toggle-sound') {
+    const isNow = sound.toggle();
+    render();
+    toast(`Audio Feedback ${isNow ? 'Enabled' : 'Muted'}.`);
+  }
+  else if (cmdId === 'toggle-theme') toggleTheme();
+  else if (cmdId === 'toggle-focus') toggleFocusMode();
+  else if (cmdId === 'switch-persona') switchPersona(param);
+  else if (cmdId === 'refresh-data') loadCasesFromApi().then(() => toast('Cases synchronized from backend.'));
+  else if (cmdId === 'select-case') {
+    state.selected = param;
+    state.view = 'overview';
+    state.tab = 'trace';
+    sound.play('click');
+    loadCaseTrace(param).then(() => render());
     render();
   }
 }
@@ -572,6 +722,7 @@ document.addEventListener('click', event => {
     const nav = event.target.closest('a[href^="#"]');
     if (nav && pageNames[nav.hash.slice(1)]) {
       event.preventDefault();
+      sound.play('click');
       state.view = nav.hash.slice(1);
       closePopover();
       render();
@@ -580,6 +731,7 @@ document.addEventListener('click', event => {
     }
     const row = event.target.closest('[data-case]');
     if (row) {
+      sound.play('click');
       state.selected = row.dataset.case;
       state.tab = 'trace';
       state.view = 'overview';
@@ -593,6 +745,7 @@ document.addEventListener('click', event => {
 
   const a = button.dataset.action;
   if (a === 'toggle-persona-popover') {
+    sound.play('click');
     if (state.popover === 'persona') { closePopover(); return; }
     state.popover = 'persona';
     document.getElementById('popover-root').innerHTML = renderPersonaPopover(activePersona, icon);
@@ -603,7 +756,41 @@ document.addEventListener('click', event => {
   else if (a === 'exit-focus') { if (focusMode) toggleFocusMode(); }
   else if (a === 'toggle-theme') toggleTheme();
   else if (a === 'set-theme-mode') toggleTheme(button.dataset.theme);
+  else if (a === 'toggle-sound') {
+    const isNow = sound.toggle();
+    render();
+    toast(`Audio Feedback ${isNow ? 'Enabled' : 'Muted'}.`);
+  }
+  else if (a === 'quick-command') openCommandPalette();
+  else if (a === 'close-cmd') closeCommandPalette();
+  else if (a === 'cmd-exec') executeCommand(button.dataset.cmd, button.dataset.param);
+  else if (a === 'set-speed') {
+    state.replaySpeed = Number(button.dataset.speed) || 1;
+    sound.play('click');
+    render();
+  }
+  else if (a === 'step-prev') {
+    const c = caseById('NR-1024');
+    if (c) {
+      c.stage = Math.max(0, (c.stage ?? 0) - 1);
+      sound.play('step');
+      render();
+    }
+  }
+  else if (a === 'step-next') {
+    const c = caseById('NR-1024');
+    if (c) {
+      c.stage = Math.min(8, (c.stage ?? 0) + 1);
+      if (c.stage === 4) sound.play('replan');
+      else if (c.stage >= 8) {
+        sound.play('success');
+        triggerCyberConfetti();
+      } else sound.play('step');
+      render();
+    }
+  }
   else if (a === 'profile') {
+    sound.play('click');
     closePopover();
     const modalData = renderPreferencesModal(
       activePersona,
@@ -646,17 +833,24 @@ document.addEventListener('click', event => {
     const focusCheck = document.getElementById('focus-toggle');
     if (focusCheck && focusCheck.checked !== focusMode) toggleFocusMode();
     document.getElementById('dialog').close();
+    sound.play('click');
     render();
     toast(`Autonomous threshold saved at ${money(autonomousThreshold)}.`);
   }
   else if (a === 'close-dialog') document.getElementById('dialog').close();
-  else if (a === 'tab') { state.tab = button.dataset.tab; render(); }
+  else if (a === 'tab') { 
+    sound.play('click');
+    state.tab = button.dataset.tab; 
+    render(); 
+  }
   else if (a === 'step') {
+    sound.play('click');
     const key = `${selected().id}-${button.dataset.step}`;
     state.expanded.has(key) ? state.expanded.delete(key) : state.expanded.add(key);
     render();
   }
   else if (a === 'expand-all') {
+    sound.play('click');
     if (state.expanded.size) state.expanded.clear();
     else getCaseSteps(selected(), state.playing, money, PERSONAS[activePersona].name).forEach((s, i) => { if (s.state !== 'waiting') state.expanded.add(`${selected().id}-${i}`); });
     render();
@@ -683,23 +877,50 @@ document.addEventListener('click', event => {
         c.decision = dec;
         c.status = dec === 'approve' ? 'Executing' : 'Escalated';
         c.reason = dec === 'approve' ? `Approved by ${PERSONAS[activePersona].name}. Autonomous refund executing.` : `Rejected by ${PERSONAS[activePersona].name}. Awaiting specialist review.`;
+        if (dec === 'approve') {
+          sound.play('success');
+          triggerCyberConfetti();
+        } else {
+          sound.play('alert');
+        }
         render();
         toast(`Case ${c.id} marked as ${dec === 'approve' ? 'Approved' : 'Rejected'}.`);
       }
     }
   }
   else if (a === 'metric') {
+    sound.play('click');
     state.filter = button.dataset.filter;
     state.risk = 'all';
     state.view = 'cases';
     render();
   }
   else if (a === 'select') {
+    sound.play('click');
     state.selected = button.dataset.id;
     state.view = 'overview';
     state.tab = 'trace';
     loadCaseTrace(state.selected).then(() => render());
     render();
+  }
+});
+
+document.addEventListener('input', event => {
+  if (event.target.id === 'cmd-input') {
+    state.cmdQuery = event.target.value;
+    state.cmdSelectedIndex = 0;
+    renderCommandPalette();
+  } else if (event.target.id === 'scrubber-range') {
+    const c = caseById('NR-1024');
+    if (c) {
+      c.stage = Number(event.target.value);
+      if (c.stage === 4) sound.play('replan');
+      else if (c.stage >= 8) {
+        sound.play('success');
+        triggerCyberConfetti();
+      } else sound.play('step');
+      render();
+    }
   }
 });
 
@@ -716,8 +937,31 @@ document.addEventListener('change', event => {
 document.addEventListener('keydown', event => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
     event.preventDefault();
-    document.getElementById('global-search')?.focus();
+    if (state.cmdOpen) closeCommandPalette();
+    else openCommandPalette();
+    return;
   }
+  if (state.cmdOpen) {
+    const items = getCommandItems(state.cmdQuery);
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      state.cmdSelectedIndex = (state.cmdSelectedIndex + 1) % Math.max(1, items.length);
+      renderCommandPalette();
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      state.cmdSelectedIndex = (state.cmdSelectedIndex - 1 + items.length) % Math.max(1, items.length);
+      renderCommandPalette();
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      if (items[state.cmdSelectedIndex]) {
+        executeCommand(items[state.cmdSelectedIndex].id, items[state.cmdSelectedIndex].param);
+      }
+    } else if (event.key === 'Escape') {
+      closeCommandPalette();
+    }
+    return;
+  }
+
   if (event.key.toLowerCase() === 'f' && !['input', 'textarea', 'select'].includes(document.activeElement?.tagName?.toLowerCase())) {
     event.preventDefault();
     toggleFocusMode();
@@ -726,6 +970,12 @@ document.addEventListener('keydown', event => {
     if (focusMode) toggleFocusMode();
     if (state.popover) closePopover();
   }
+});
+
+// Cursor Spotlight Ambient Glow
+document.addEventListener('pointermove', event => {
+  document.documentElement.style.setProperty('--mouse-x', `${event.clientX}px`);
+  document.documentElement.style.setProperty('--mouse-y', `${event.clientY}px`);
 });
 
 window.addEventListener('popstate', () => {

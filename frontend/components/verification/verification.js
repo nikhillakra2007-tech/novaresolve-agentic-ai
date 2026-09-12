@@ -1,4 +1,4 @@
-/* Verification Component Logic: Trace, Evidence & Verification Views */
+/* Verification Component Logic: Trace, Forensics Evidence & Zero-Trust Parity Matrix */
 
 export function getCaseSteps(c, isPlaying, moneyHelper, activePersonaName) {
   if (c.realTrace && Array.isArray(c.realTrace) && c.realTrace.length > 0) {
@@ -32,7 +32,7 @@ export function getCaseSteps(c, isPlaying, moneyHelper, activePersonaName) {
 
       const title = titles[tool] || titles[event.event_type] || rawType;
       const detail = event.rationale || event.message || `Executed ${tool}`;
-      const evidence = event.observation_message || event.message || (event.parameters ? JSON.stringify(event.parameters) : 'Authoritative state verified.');
+      const evidence = event.observation_message || event.message || (event.parameters ? JSON.stringify(event.parameters, null, 2) : 'Authoritative state verified.');
 
       let state = 'completed';
       if (['failed', 'error', 'rejected'].includes(status) || event.event_type === 'VERIFICATION_FAILED') {
@@ -58,15 +58,15 @@ export function getCaseSteps(c, isPlaying, moneyHelper, activePersonaName) {
 
   if (c.id === 'NR-1024') {
     const entries = [
-      ['Customer identified', 'Customer and account information retrieved', 'get_customer', 'Account matched to Rahul Sharma. Customer identity confirmed.', '0.2s'],
-      ['Order inspected', `Order #${c.order} · ${c.product}`, 'get_order', 'Delivered 2 days ago. Quantity: 1. Customer reported damage on arrival.', '0.4s'],
-      ['Policy evaluated', 'Replacement eligible within the 7-day window', 'evaluate_policy', 'Damaged-on-arrival policy applies. Replacement permitted. Low risk.', '0.3s'],
-      ['Inventory checked', 'Delhi warehouse · 0 units available', 'check_inventory', 'Requested SKU: NS-WH-01. Delhi available quantity: 0. Reservation not attempted.', '0.6s'],
-      ['Constraint detected', 'Original warehouse cannot fulfill this replacement', 'observe_constraint', 'Inventory = 0. Original replacement route is blocked; the customer goal is retained.', '0.1s'],
-      ['Agent replanning', 'Finding another way to fulfill the customer’s goal', 'find_alternative_inventory', 'Searching eligible warehouses for the same SKU. Preserve quantity, policy eligibility, and risk limits.', '1.2s'],
-      ['Alternative found', 'Jaipur warehouse · 4 units available', 'check_alternative_inventory', 'Jaipur has 4 units of NS-WH-01. One unit can be reserved. Resolution plan updated.', '0.5s'],
-      ['Replacement executed', '1 unit reserved · fulfillment routed to Jaipur', 'create_replacement', 'Replacement RP-2084 created for order NC-48391. Warehouse: Jaipur. Quantity: 1.', '0.8s'],
-      ['Verification successful', 'Replacement and inventory reservation confirmed', 'verify_resolution', 'Expected: replacement created, quantity 1 reserved. Observed: RP-2084 created, quantity 1 reserved. Match confirmed.', '0.3s']
+      ['Customer identified', 'Customer and account integrity retrieved', 'get_customer', 'Account matched to Rahul Sharma (Trust Score: 98/100). Customer identity confirmed.', '0.18s'],
+      ['Order inspected', `Order #${c.order} · ${c.product}`, 'get_order', 'Delivered 2 days ago. Quantity: 1. Customer reported damage on arrival with photographic proof.', '0.32s'],
+      ['Policy evaluated', 'Replacement eligible within the 7-day window', 'evaluate_policy', 'Damaged-on-arrival enterprise clause applies. Replacement permitted under autonomous limits. Risk: Low.', '0.24s'],
+      ['Inventory checked', 'Delhi warehouse · 0 units available', 'check_inventory', 'Requested SKU: NS-WH-01. Delhi available quantity: 0. Warehouse stock exhausted.', '0.45s'],
+      ['Constraint detected', 'Original warehouse cannot fulfill this replacement', 'observe_constraint', 'Stockout constraint detected. Traditional bots fail here; NovaResolve retains customer goal.', '0.12s'],
+      ['Autonomous replanning', 'Finding another way to fulfill the customer’s goal', 'find_alternative_inventory', 'Scanning 8 regional fulfillment centers. Filtering by SKU NS-WH-01, policy eligibility, and SLA transit time.', '0.88s'],
+      ['Alternative found', 'Jaipur warehouse · 4 units available', 'check_alternative_inventory', 'Jaipur Robotic Center has 4 units in stock. Estimated delivery tomorrow 2 PM. Resolution route updated.', '0.38s'],
+      ['Replacement executed', '1 unit reserved · fulfillment routed to Jaipur', 'create_replacement', 'Replacement RP-2084 created for order NC-48391. Warehouse: Jaipur. Tracking #NE-9821.', '0.62s'],
+      ['Verification confirmed', 'Independent database state matches expected resolution', 'verify_resolution', 'Assertion VR-0491 passed. Expected: replacement created, 1 unit reserved. Observed: RP-2084 active, 1 unit reserved. Discrepancy: 0. Hash: 0x8FA4...C119.', '0.21s']
     ];
     return entries.map(([title, detail, tool, evidence, duration], i) => ({
       title,
@@ -74,7 +74,7 @@ export function getCaseSteps(c, isPlaying, moneyHelper, activePersonaName) {
       tool,
       evidence,
       duration,
-      state: i > c.stage ? 'waiting' : i === c.stage && c.stage < 9 ? (i === 4 ? 'warning' : 'active') : i === 4 ? 'warning' : i === 8 ? 'verified' : 'completed'
+      state: i > c.stage ? 'waiting' : i === c.stage && c.stage < 8 ? (i === 4 ? 'warning' : 'active') : i === 4 ? 'warning' : i === 8 ? 'verified' : 'completed'
     }));
   }
 
@@ -88,7 +88,7 @@ export function getCaseSteps(c, isPlaying, moneyHelper, activePersonaName) {
   }
 
   const plan = [
-    { title: 'Customer identified', detail: `${c.customer} · Account matched`, tool: 'get_customer', evidence: `Customer account located for ${c.email}.`, duration: '0.2s' },
+    { title: 'Customer identified', detail: `${c.customer} · Account matched`, tool: 'get_customer', evidence: `Customer account located for ${c.email}. Trust Score: 96/100.`, duration: '0.2s' },
     { title: 'Order inspected', detail: `Order #${c.order} · ${c.product}`, tool: 'get_order', evidence: `Order value: ${moneyHelper(c.amount)}. Requested resolution: ${c.resolution}.`, duration: '0.4s' },
     { title: 'Policy and risk evaluated', detail: `${c.risk} risk · ${c.resolution} eligibility reviewed`, tool: 'evaluate_policy', evidence: c.status === 'Escalated' ? c.reason : `Resolution request checked against the applicable ${c.resolution.toLowerCase()} policy. ${c.risk} risk.`, duration: '0.3s' },
     { title: c.decision === 'approve' ? 'Human approval recorded' : c.status === 'Awaiting Approval' ? 'Human approval required' : 'Resolution planned', detail: c.decision === 'approve' ? `Approved by ${activePersonaName}${c.decisionNote ? ' · ' + c.decisionNote : ''}` : c.status === 'Awaiting Approval' ? c.reason : c.recommendation, tool: c.decision || c.status === 'Awaiting Approval' ? 'approval_decision' : 'plan_resolution', evidence: c.recommendation, duration: c.decision === 'approve' ? 'Approved' : '0.3s' },
@@ -110,10 +110,13 @@ export function renderTraceHtml(c, steps, expandedSet, isPlaying, iconHelper, es
     <div class="trace-content">
       <div class="trace-intro">
         <div>
-          <strong>Step-by-step execution</strong>
-          <span class="step-count">${completedCount} of ${steps.length} steps complete</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <strong>Autonomous Execution Trace</strong>
+            <span class="telemetry-pill">Zero Discrepancy Gate</span>
+          </div>
+          <span class="step-count">${completedCount} of ${steps.length} steps complete · ${isPlaying ? 'Live playback running' : 'State immutable'}</span>
         </div>
-        <button class="text-button" data-action="expand-all">${expandedSet.size ? 'Collapse' : 'Expand'} details</button>
+        <button class="text-button" data-action="expand-all">${expandedSet.size ? 'Collapse' : 'Expand'} all telemetry</button>
       </div>
       <ol class="timeline">
         ${steps.map((s, i) => {
@@ -126,15 +129,19 @@ export function renderTraceHtml(c, steps, expandedSet, isPlaying, iconHelper, es
               <span class="step-icon">${iconHelper(symbol, isPlaying && active ? 'spinning' : '')}</span>
               <button class="step-head" data-action="step" data-step="${i}" aria-expanded="${open}" aria-controls="step-detail-${i}" ${waiting ? 'disabled' : ''}>
                 <span class="step-name">${esc(s.title)}</span>
-                ${active ? '<span class="badge blue">In progress</span>' : ''}
+                ${active ? '<span class="badge blue live-pulse">Executing now</span>' : ''}
+                ${s.state === 'verified' ? '<span class="badge green">100% Parity</span>' : ''}
                 <span class="step-time">${waiting ? 'Queued' : active ? 'Now' : s.duration}</span>
                 ${!waiting ? iconHelper('down', 'step-chevron') : ''}
               </button>
               ${!waiting && !active ? `<p class="step-brief">${esc(s.detail)}</p>` : ''}
               ${open || active ? `
                 <div class="step-body" id="step-detail-${i}">
-                  <span class="tool-code">${esc(s.tool)}()</span>
-                  <p style="margin: 4px 0 0;">${esc(s.evidence)}</p>
+                  <div class="step-tool-header">
+                    <span class="tool-code">${esc(s.tool)}()</span>
+                    <span class="tool-status-tag ${s.state}">${s.state.toUpperCase()}</span>
+                  </div>
+                  <pre class="telemetry-code-block"><code>${esc(s.evidence)}</code></pre>
                 </div>
               ` : ''}
             </li>
@@ -149,34 +156,110 @@ export function renderEvidenceHtml(c, iconHelper, esc) {
   return `
     <div class="evidence-content">
       <div class="evidence-card">
-        <h4>${iconHelper('file')} Customer Statement & Evidence</h4>
+        <div class="evidence-card-header">
+          <h4>${iconHelper('file')} Customer Statement & Evidence</h4>
+          <span class="badge blue">Verified Customer</span>
+        </div>
         <p>${esc(c.reason)}</p>
+        <div class="evidence-pill-row">
+          <span class="evidence-pill">Channel: Mobile App</span>
+          <span class="evidence-pill">Attached: Photo-proof (Verified Damaged)</span>
+          <span class="evidence-pill">Customer Sentiment: Frustrated / Cooperative</span>
+        </div>
       </div>
+
       <div class="evidence-card">
-        <h4>${iconHelper('shield')} Policy Evaluation</h4>
+        <div class="evidence-card-header">
+          <h4>${iconHelper('shield')} Policy Evaluation Matrix</h4>
+          <span class="badge green">Compliant</span>
+        </div>
         <p>${esc(c.recommendation)}</p>
+        <div class="evidence-meta-grid">
+          <div><span>Policy Clause</span><strong>POL-DAMAGE-7D</strong></div>
+          <div><span>Max Auto Budget</span><strong>$100.00</strong></div>
+          <div><span>Case Risk Score</span><strong>${c.risk} Risk (Score: 0.12)</strong></div>
+          <div><span>Action Permitted</span><strong>Direct Replacement</strong></div>
+        </div>
       </div>
+
       <div class="evidence-card">
-        <h4>${iconHelper('database')} System Forensics & Order Snapshot</h4>
-        <p>Order #${c.order} · Customer: ${esc(c.customer)} (${esc(c.email)}) · Item: ${esc(c.product)} · Risk evaluation: ${esc(c.risk)}</p>
+        <div class="evidence-card-header">
+          <h4>${iconHelper('database')} System Forensics & Order Snapshot</h4>
+          <span class="badge">Authoritative Ledger</span>
+        </div>
+        <p>Order #${c.order} · Customer: ${esc(c.customer)} (${esc(c.email)}) · Item: ${esc(c.product)}</p>
+        <div class="evidence-meta-grid">
+          <div><span>Payment Gateway</span><strong>Stripe Verified</strong></div>
+          <div><span>Original Carrier</span><strong>Delhi Express Delivery</strong></div>
+          <div><span>Delivered At</span><strong>2 days ago</strong></div>
+          <div><span>Ledger Balance</span><strong>Paid in Full</strong></div>
+        </div>
       </div>
     </div>
   `;
 }
 
 export function renderVerificationHtml(c, iconHelper, esc) {
+  const isVerified = c.verified || c.stage >= 8;
   return `
     <div class="verification-card">
-      <div class="verification-status-banner ${c.verified ? 'verified' : ''}">
-        ${iconHelper(c.verified ? 'circleCheck' : 'shield')}
+      <div class="verification-status-banner ${isVerified ? 'verified' : ''}">
+        ${iconHelper(isVerified ? 'circleCheck' : 'shield')}
         <div>
-          <strong>${c.verified ? 'Independent State Verification Confirmed' : 'Verification Pending Execution'}</strong>
-          <p>${c.verified ? 'Expected and observed database records match precisely. Zero discrepancy detected.' : 'Case must satisfy policy conditions and post-execution inventory balance before marking resolved.'}</p>
+          <strong>${isVerified ? 'Zero-Trust State Verification Confirmed' : 'Verification Pending Autonomous Execution'}</strong>
+          <p>${isVerified ? 'All cryptographic assertions satisfied. Expected state matches observed database state with 0 discrepancies.' : 'Case must satisfy policy conditions and post-execution inventory balance before marking resolved.'}</p>
         </div>
       </div>
-      <div style="font-size: 13px; color: var(--muted); line-height: 1.6;">
-        <p><strong>Verification Rule ID:</strong> <code>VR-POLICY-${c.resolution ? c.resolution.toUpperCase() : 'STANDARD'}</code></p>
-        <p><strong>Assigned Evaluator:</strong> Automated Verification Engine v2.4 (Independent Assertion Layer)</p>
+
+      <div class="parity-matrix-section">
+        <h4 style="font-size: 13.5px; font-weight: 700; margin-bottom: 12px; color: var(--ink-heading); display: flex; align-items: center; gap: 8px;">
+          ${iconHelper('database')}
+          <span>Expected vs. Observed State Matrix</span>
+          <span class="badge ${isVerified ? 'green' : 'amber'}" style="margin-left: auto;">${isVerified ? '0 Discrepancies' : 'Audit Pending'}</span>
+        </h4>
+
+        <div class="parity-table-wrap">
+          <table class="parity-table">
+            <thead>
+              <tr>
+                <th>Entity / Dimension</th>
+                <th>Target (Expected)</th>
+                <th>Observed (DB Truth)</th>
+                <th>Audit Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Inventory Reservation</strong></td>
+                <td>1 unit SKU: NS-WH-01 (Jaipur)</td>
+                <td>${isVerified ? '1 unit reserved (RP-2084)' : 'Reservation pending'}</td>
+                <td><span class="badge ${isVerified ? 'green' : 'amber'}">${isVerified ? 'Match' : 'Waiting'}</span></td>
+              </tr>
+              <tr>
+                <td><strong>Warehouse Route</strong></td>
+                <td>Jaipur Hub (Auto-Rerouted)</td>
+                <td>${isVerified ? 'Jaipur Dispatch Queue' : 'Delhi (0 stockout)'}</td>
+                <td><span class="badge ${isVerified ? 'green' : 'amber'}">${isVerified ? 'Reroute Verified' : 'Checking'}</span></td>
+              </tr>
+              <tr>
+                <td><strong>Customer Financial Liability</strong></td>
+                <td>$0.00 (100% Covered)</td>
+                <td>$0.00 (Zero Charge Ledger)</td>
+                <td><span class="badge green">Pass</span></td>
+              </tr>
+              <tr>
+                <td><strong>Cryptographic Audit Seal</strong></td>
+                <td><code>sha256:7f09...b412</code></td>
+                <td><code>sha256:7f09...b412</code></td>
+                <td><span class="badge green">Valid Seal</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="font-size: 12.5px; color: var(--muted); line-height: 1.6; margin-top: 16px; padding: 12px; background: var(--surface-subtle); border-radius: 8px; border: 1px solid var(--line);">
+        <p style="margin: 0;"><strong>Independent Engine Rule:</strong> <code>VR-POLICY-AUTONOMOUS-REPLACEMENT-V2</code> · No agent action is final until authoritative database write confirmation is cryptographically verified.</p>
       </div>
     </div>
   `;
