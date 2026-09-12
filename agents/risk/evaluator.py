@@ -14,7 +14,11 @@ class RiskEvaluator:
     HIGH_RISK_REFUND_THRESHOLD = Decimal("100.00")
 
     @classmethod
-    def should_require_approval(cls, state: AgentState) -> bool:
+    def should_require_approval(
+        cls,
+        state: AgentState,
+        action_name: Optional[str] = None,
+    ) -> bool:
         """Determines if the current case state and planned resolution requires supervisor approval."""
         # 0. If supervisor already granted approval, do not gate again
         if state.approval_status == "approved":
@@ -34,11 +38,18 @@ class RiskEvaluator:
         if cust_data and cust_data.get("risk_level") == "high":
             return True
 
-        # 4. Check resolution amount
-        order_data = state.evidence.get("order")
-        if order_data and "total_amount" in order_data:
-            amt = Decimal(str(order_data["total_amount"]))
-            if amt >= cls.HIGH_RISK_REFUND_THRESHOLD:
-                return True
+        # 4. Check refund resolution amount against the refund approval threshold
+        # Specifically applies to refund actions or refund resolution intents
+        is_refund = (
+            action_name == "create_refund"
+            or state.issue_type == "refund"
+            or state.resolution_type == "refund"
+        )
+        if is_refund:
+            order_data = state.evidence.get("order")
+            if order_data and "total_amount" in order_data:
+                amt = Decimal(str(order_data["total_amount"]))
+                if amt >= cls.HIGH_RISK_REFUND_THRESHOLD:
+                    return True
 
         return False

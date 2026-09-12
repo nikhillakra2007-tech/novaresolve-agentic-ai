@@ -72,6 +72,7 @@ class AgentReplanner:
                         "Replanning: searching alternative warehouses with active stock."
                     ),
                     expected_outcome="List of candidate warehouses with stock available.",
+                    source="replanner",
                 )
 
             # If alternatives were searched and found:
@@ -93,6 +94,7 @@ class AgentReplanner:
                         f"alternative warehouse '{chosen_wh.get('warehouse_name')}' with {chosen_wh.get('available_quantity')} units."
                     ),
                     expected_outcome="Replacement created and inventory reserved at alternative warehouse.",
+                    source="replanner",
                 )
 
             # If no alternatives exist anywhere in the network:
@@ -129,6 +131,7 @@ class AgentReplanner:
                 },
                 rationale="Inventory unavailable across entire warehouse network. Adapting resolution plan to evaluate policy for full refund.",
                 expected_outcome="Policy decision and approval requirements for candidate refund resolution.",
+                source="replanner",
             )
 
         # ------------------------------------------------------------------
@@ -141,6 +144,7 @@ class AgentReplanner:
                 parameters={"case_id": state.case_id},
                 rationale="Resolution entity already exists in database. Verifying existing resolution state directly.",
                 expected_outcome="Resolution state verified without duplicate entity creation.",
+                source="replanner",
             )
 
         # ------------------------------------------------------------------
@@ -186,6 +190,7 @@ class AgentReplanner:
                         },
                         rationale="Replacement verification failed. Evaluating policy for alternative refund recovery.",
                         expected_outcome="Policy decision for recovery refund.",
+                        source="replanner",
                     )
             # If no safe alternative recovery action exists, return None to trigger controlled escalation
             return None

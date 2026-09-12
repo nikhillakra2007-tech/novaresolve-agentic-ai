@@ -67,6 +67,21 @@ class LLMDecisionProvider(DecisionProvider):
         state_context = build_llm_state_context(state)
         tool_schemas = [tool.get_json_schema() for tool in tools] if tools else TOOL_REGISTRY.get_schemas()
 
+        # Build Gemini function declarations from schemas
+        tool_declarations = []
+        try:
+            from google.genai import types
+            for s in tool_schemas:
+                tool_declarations.append(
+                    types.FunctionDeclaration(
+                        name=s["name"],
+                        description=s["description"],
+                        parameters=s["parameters"],
+                    )
+                )
+        except Exception:
+            tool_declarations = None
+
         user_prompt = (
             "CURRENT AUTHORITATIVE CASE STATE:\n"
             f"{json.dumps(state_context, indent=2)}\n\n"
@@ -77,7 +92,6 @@ class LLMDecisionProvider(DecisionProvider):
         )
 
         decision_data: Optional[Dict[str, Any]] = None
-        used_fallback = False
 
         # 3. Call LLM Client with error isolation
         try:
@@ -88,12 +102,12 @@ class LLMDecisionProvider(DecisionProvider):
             decision_data = self.client.generate_decision(
                 system_instruction=SYSTEM_INSTRUCTIONS,
                 user_prompt=user_prompt,
+                tool_declarations=tool_declarations,
             )
         except Exception as ex:
             logger.warning(f"LLM decision provider error for case '{state.case_id}': {str(ex)}")
             if self.fallback_on_error and self.fallback_provider:
                 logger.info(f"Falling back to {self.fallback_provider.name} decision provider for case '{state.case_id}'")
-                used_fallback = True
                 fallback_action = self.fallback_provider.decide(state, tools, db)
                 if fallback_action:
                     fallback_action.source = "deterministic_fallback"

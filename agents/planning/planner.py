@@ -21,11 +21,20 @@ class AgentPlanner:
         goal_lower = goal.lower()
         issue_lower = issue_type.lower()
 
-        if "replace" in goal_lower or "replacement" in issue_lower:
+        # Check explicit/adapted issue_type first
+        if "replacement" in issue_lower:
             return "replacement"
-        elif "cancel" in goal_lower or "cancellation" in issue_lower:
+        elif "cancellation" in issue_lower:
             return "cancellation"
-        elif "refund" in goal_lower or "return" in goal_lower or "refund" in issue_lower:
+        elif "refund" in issue_lower:
+            return "refund"
+
+        # Fallback to goal text
+        if "replace" in goal_lower:
+            return "replacement"
+        elif "cancel" in goal_lower:
+            return "cancellation"
+        elif "refund" in goal_lower or "return" in goal_lower:
             return "refund"
         return None
 

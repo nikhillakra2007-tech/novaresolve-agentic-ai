@@ -29,7 +29,7 @@ This repository contains **Phase 1 (Database Foundation)**, **Phase 2 (Domain Se
   - Central `TOOL_REGISTRY` with strict execution boundaries (blocks raw SQL, eval, and arbitrary execution).
 - **Agent Decision Making & Runtime (`agents/planning/`, `agents/runtime/`)**:
   - **Decision Provider Abstraction**: `DecisionProvider` base interface with `LLMDecisionProvider` (primary) and `DeterministicDecisionProvider` (fallback).
-  - **Google Gemini Integration**: Powered by official `google-genai` SDK (`gemini-1.5-flash` / `gemini-2.5-flash`) under free/free-tier API limits.
+  - **Google Gemini Integration**: Powered by official `google-genai` SDK (`gemini-3.7-flash`) supporting native structured function calling with JSON fallback under free-tier limits.
   - **Structured Action Validation**: LLM outputs typed decisions validated against `TOOL_REGISTRY` and Pydantic schemas.
   - **Risk & Approval Gates**: `RiskEvaluator` enforces approval requirements on high-risk actions ($100+ refunds, etc.) before execution.
   - **Bounded Adaptation & Replanning**: `AgentReplanner` adapts on zero-inventory (searches alternative warehouses) and rechecks policy on strategy pivots.
@@ -217,13 +217,13 @@ Start the FastAPI application:
 
 ## Running Automated Tests
 
-Run the complete Pytest test suite (128 passing tests):
+Run the complete Pytest test suite (130 passing tests):
 ```powershell
 $env:PYTHONPATH="."
 .\backend\.venv\Scripts\pytest.exe backend/tests -v
 ```
 
-All 128 tests execute in ~25 seconds and verify:
+All 130 tests execute in ~28 seconds and verify:
 - System health and PostgreSQL connectivity latency
 - All 13 SQLAlchemy models and check constraints
 - Seed scenario integrity across 10 deliberate customer problems
@@ -236,7 +236,7 @@ All 128 tests execute in ~25 seconds and verify:
 - FastAPI REST endpoints HTTP status code mappings (200, 201, 400, 403, 404, 409)
 - Phase 3 tool contracts and Pydantic parameter schemas
 - Phase 4 deterministic agent runtime loop, replanning, and verification
-- Phase 5 LLM decision making (20 tests covering investigation, actions, RiskEvaluator gates, policy denial, unknown intent, loop limits, zero inventory adaptation, multi-case isolation, secret protection, and error fallback)
+- Phase 5 LLM decision making (22 tests covering investigation, actions, RiskEvaluator gates, policy denial, unknown intent, loop limits, zero inventory adaptation, multi-case isolation, secret protection, error fallback, DecisionProviderFactory, and direct DecisionProvider loop delegation)
 
 ---
 
@@ -248,7 +248,7 @@ To run a live test using Google Gemini:
 2. Add your key to `.env`:
    ```ini
    LLM_PROVIDER=gemini
-   LLM_MODEL=gemini-1.5-flash
+   LLM_MODEL=gemini-3.7-flash
    GEMINI_API_KEY=your_actual_gemini_api_key
    LLM_FALLBACK_TO_DETERMINISTIC=True
    LLM_TIMEOUT_SECONDS=15

@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 
 from agents.state.models import AgentState, AgentAction, AgentObservation, AgentRunResult
 from agents.state.manager import StateManager
-from agents.planning.planner import AgentPlanner
 from agents.replanning.replanner import AgentReplanner
 from agents.risk.evaluator import RiskEvaluator
 from agents.runtime.executor import ToolExecutor
@@ -231,7 +230,7 @@ class AgentLoop:
             # -------------------------------------------------------------
             consequential_actions = {"create_refund", "create_replacement", "cancel_order"}
             if action.tool_name in consequential_actions:
-                if RiskEvaluator.should_require_approval(state):
+                if RiskEvaluator.should_require_approval(state, action_name=action.tool_name):
                     logger.info(f"Consequential action '{action.tool_name}' requires supervisor approval. Halting execution.")
                     state.current_status = "awaiting_approval"
                     state.requires_approval = True
@@ -251,11 +250,13 @@ class AgentLoop:
             # 5. Execute Action
             # -------------------------------------------------------------
             state.current_step = action.tool_name
+            decision_source = getattr(action, "source", "deterministic")
             trace_entry = {
                 "step": state.attempt_count,
                 "tool_name": action.tool_name,
                 "rationale": action.rationale,
-                "source": getattr(action, "source", "deterministic"),
+                "decision_source": decision_source,
+                "source": decision_source,
                 "parameters": {k: str(v) if isinstance(v, uuid.UUID) else v for k, v in action.parameters.items()},
             }
 

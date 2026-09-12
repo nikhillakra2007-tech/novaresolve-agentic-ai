@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     # LLM Configuration (Phase 5)
     LLM_PROVIDER: str = "gemini"
-    LLM_MODEL: str = "gemini-1.5-flash"
+    LLM_MODEL: str = "gemini-3.7-flash"
     GEMINI_API_KEY: Optional[str] = None
     LLM_FALLBACK_TO_DETERMINISTIC: bool = True
     LLM_TIMEOUT_SECONDS: int = 15

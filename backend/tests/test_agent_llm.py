@@ -43,7 +43,7 @@ class MockGeminiClient(GeminiClient):
         side_effect: Optional[Any] = None,
         api_key: str = "test-secret-key-12345",
     ) -> None:
-        super().__init__(api_key=api_key, model_name="gemini-1.5-flash")
+        super().__init__(api_key=api_key, model_name="gemini-3.7-flash")
         self.responses = list(responses) if responses else []
         self.side_effect = side_effect
         self.call_count = 0
@@ -53,7 +53,13 @@ class MockGeminiClient(GeminiClient):
     def is_available(self) -> bool:
         return True
 
-    def generate_decision(self, system_instruction: str, user_prompt: str) -> Dict[str, Any]:
+    def generate_decision(
+        self,
+        system_instruction: str,
+        user_prompt: str,
+        tool_declarations: Optional[List[Any]] = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
         self.call_count += 1
         self.last_user_prompt = user_prompt
         self.last_system_instruction = system_instruction
@@ -267,30 +273,38 @@ def test_05_replacement_flow(db_session: Session):
 
     # Ensure stock exists in warehouse
     inv = db_session.query(Inventory).filter(Inventory.product_id == product_id, Inventory.warehouse_id == warehouse.id).first()
+    orig_qty = inv.quantity if inv else 0
+    orig_res = inv.reserved_quantity if inv else 0
     if inv:
         inv.quantity = 10
         inv.reserved_quantity = 0
         db_session.commit()
 
-    mock_client = MockGeminiClient(responses=[
-        {"action": "get_customer", "arguments": {"customer_id": str(case.customer_id)}, "reason": "Lookup customer"},
-        {"action": "get_order", "arguments": {"order_id": str(case.order_id)}, "reason": "Lookup order"},
-        {"action": "get_shipment", "arguments": {"order_id": str(case.order_id)}, "reason": "Lookup shipment"},
-        {"action": "evaluate_policy", "arguments": {"issue_type": "replacement", "order_status": "delivered", "reason": "damaged"}, "reason": "Policy check"},
-        {"action": "check_inventory", "arguments": {"product_id": str(product_id), "warehouse_id": str(warehouse.id), "quantity": 1}, "reason": "Check inventory"},
-        {"action": "create_replacement", "arguments": {"order_id": str(case.order_id), "product_id": str(product_id), "warehouse_id": str(warehouse.id), "quantity": 1, "reason": "Damaged replacement"}, "reason": "Create replacement"},
-        {"action": "verify_resolution", "arguments": {"case_id": str(case.id)}, "reason": "Verify replacement"},
-    ])
-    provider = LLMDecisionProvider(client=mock_client, fallback_on_error=False)
+    try:
+        mock_client = MockGeminiClient(responses=[
+            {"action": "get_customer", "arguments": {"customer_id": str(case.customer_id)}, "reason": "Lookup customer"},
+            {"action": "get_order", "arguments": {"order_id": str(case.order_id)}, "reason": "Lookup order"},
+            {"action": "get_shipment", "arguments": {"order_id": str(case.order_id)}, "reason": "Lookup shipment"},
+            {"action": "evaluate_policy", "arguments": {"issue_type": "replacement", "order_status": "delivered", "reason": "damaged"}, "reason": "Policy check"},
+            {"action": "check_inventory", "arguments": {"product_id": str(product_id), "warehouse_id": str(warehouse.id), "quantity": 1}, "reason": "Check inventory"},
+            {"action": "create_replacement", "arguments": {"order_id": str(case.order_id), "product_id": str(product_id), "warehouse_id": str(warehouse.id), "quantity": 1, "reason": "Damaged replacement"}, "reason": "Create replacement"},
+            {"action": "verify_resolution", "arguments": {"case_id": str(case.id)}, "reason": "Verify replacement"},
+        ])
+        provider = LLMDecisionProvider(client=mock_client, fallback_on_error=False)
 
-    result = NovaResolveAgent.run(db=db_session, case_id=case.id, decision_provider=provider)
+        result = NovaResolveAgent.run(db=db_session, case_id=case.id, decision_provider=provider)
 
-    assert result.success is True
-    assert result.status == "resolved"
+        assert result.success is True
+        assert result.status == "resolved"
 
-    rep = db_session.query(Replacement).filter(Replacement.case_id == case.id).first()
-    assert rep is not None
-    assert rep.status in {"approved", "completed", "processing"}
+        rep = db_session.query(Replacement).filter(Replacement.case_id == case.id).first()
+        assert rep is not None
+        assert rep.status in {"approved", "completed", "processing"}
+    finally:
+        if inv:
+            inv.quantity = orig_qty
+            inv.reserved_quantity = orig_res
+            db_session.commit()
 
 
 # ============================================================
@@ -309,37 +323,51 @@ def test_06_zero_inventory_adaptation(db_session: Session):
 
     # Zero stock in primary warehouse, ample stock in alt warehouse
     inv_primary = db_session.query(Inventory).filter(Inventory.product_id == product_id, Inventory.warehouse_id == primary_wh.id).first()
+    orig_p_qty = inv_primary.quantity if inv_primary else 0
+    orig_p_res = inv_primary.reserved_quantity if inv_primary else 0
+    inv_alt = db_session.query(Inventory).filter(Inventory.product_id == product_id, Inventory.warehouse_id == alt_wh.id).first()
+    orig_a_qty = inv_alt.quantity if inv_alt else 0
+    orig_a_res = inv_alt.reserved_quantity if inv_alt else 0
+
     if inv_primary:
         inv_primary.quantity = 0
         inv_primary.reserved_quantity = 0
-    inv_alt = db_session.query(Inventory).filter(Inventory.product_id == product_id, Inventory.warehouse_id == alt_wh.id).first()
     if inv_alt:
         inv_alt.quantity = 15
         inv_alt.reserved_quantity = 0
     db_session.commit()
 
-    mock_client = MockGeminiClient(responses=[
-        {"action": "get_customer", "arguments": {"customer_id": str(case.customer_id)}, "reason": "Lookup customer"},
-        {"action": "get_order", "arguments": {"order_id": str(case.order_id)}, "reason": "Lookup order"},
-        {"action": "get_shipment", "arguments": {"order_id": str(case.order_id)}, "reason": "Lookup shipment"},
-        {"action": "evaluate_policy", "arguments": {"issue_type": "replacement", "order_status": "delivered", "reason": "damaged"}, "reason": "Policy check"},
-        {"action": "check_inventory", "arguments": {"product_id": str(product_id), "warehouse_id": str(primary_wh.id), "quantity": 1}, "reason": "Check primary inventory"},
-        # check_inventory will return INSUFFICIENT_INVENTORY.
-        # AgentReplanner or next step searches alternative inventory:
-        {"action": "search_alternative_inventory", "arguments": {"product_id": str(product_id), "exclude_warehouse_id": str(primary_wh.id), "min_quantity": 1}, "reason": "Search alternative warehouse"},
-        {"action": "create_replacement", "arguments": {"order_id": str(case.order_id), "product_id": str(product_id), "warehouse_id": str(alt_wh.id), "quantity": 1, "reason": "Adapted replacement"}, "reason": "Create replacement at alt warehouse"},
-        {"action": "verify_resolution", "arguments": {"case_id": str(case.id)}, "reason": "Verify final replacement"},
-    ])
-    provider = LLMDecisionProvider(client=mock_client, fallback_on_error=True)
+    try:
+        mock_client = MockGeminiClient(responses=[
+            {"action": "get_customer", "arguments": {"customer_id": str(case.customer_id)}, "reason": "Lookup customer"},
+            {"action": "get_order", "arguments": {"order_id": str(case.order_id)}, "reason": "Lookup order"},
+            {"action": "get_shipment", "arguments": {"order_id": str(case.order_id)}, "reason": "Lookup shipment"},
+            {"action": "evaluate_policy", "arguments": {"issue_type": "replacement", "order_status": "delivered", "reason": "damaged"}, "reason": "Policy check"},
+            {"action": "check_inventory", "arguments": {"product_id": str(product_id), "warehouse_id": str(primary_wh.id), "quantity": 1}, "reason": "Check primary inventory"},
+            # check_inventory will return INSUFFICIENT_INVENTORY.
+            # AgentReplanner or next step searches alternative inventory:
+            {"action": "search_alternative_inventory", "arguments": {"product_id": str(product_id), "exclude_warehouse_id": str(primary_wh.id), "min_quantity": 1}, "reason": "Search alternative warehouse"},
+            {"action": "create_replacement", "arguments": {"order_id": str(case.order_id), "product_id": str(product_id), "warehouse_id": str(alt_wh.id), "quantity": 1, "reason": "Adapted replacement"}, "reason": "Create replacement at alt warehouse"},
+            {"action": "verify_resolution", "arguments": {"case_id": str(case.id)}, "reason": "Verify final replacement"},
+        ])
+        provider = LLMDecisionProvider(client=mock_client, fallback_on_error=True)
 
-    result = NovaResolveAgent.run(db=db_session, case_id=case.id, decision_provider=provider)
+        result = NovaResolveAgent.run(db=db_session, case_id=case.id, decision_provider=provider)
 
-    assert result.success is True
-    assert result.status == "resolved"
+        assert result.success is True
+        assert result.status == "resolved"
 
-    rep = db_session.query(Replacement).filter(Replacement.case_id == case.id).first()
-    assert rep is not None
-    assert rep.warehouse_id == alt_wh.id
+        rep = db_session.query(Replacement).filter(Replacement.case_id == case.id).first()
+        assert rep is not None
+        assert rep.warehouse_id == alt_wh.id
+    finally:
+        if inv_primary:
+            inv_primary.quantity = orig_p_qty
+            inv_primary.reserved_quantity = orig_p_res
+        if inv_alt:
+            inv_alt.quantity = orig_a_qty
+            inv_alt.reserved_quantity = orig_a_res
+        db_session.commit()
 
 
 # ============================================================
@@ -705,3 +733,71 @@ def test_20_backward_compatibility_existing_tests(db_session: Session):
     result = NovaResolveAgent.run(db=db_session, case_id=case.id, decision_provider=provider)
     assert result.status == "resolved"
     assert result.success is True
+
+
+# ============================================================
+# 21. DECISION PROVIDER FACTORY INTEGRATION
+# ============================================================
+
+def test_21_decision_provider_factory_resolution():
+    """Test 21: DecisionProviderFactory returns LLMDecisionProvider when LLM_PROVIDER=gemini."""
+    from backend.app.core.config import settings
+    from agents.planning.decision_provider import DecisionProviderFactory
+
+    original_provider = settings.LLM_PROVIDER
+    try:
+        settings.LLM_PROVIDER = "gemini"
+        provider = DecisionProviderFactory.get_default_provider()
+        assert isinstance(provider, LLMDecisionProvider)
+        assert provider.name == "llm"
+        assert provider.provider_type == "gemini"
+
+        settings.LLM_PROVIDER = "deterministic"
+        det_provider = DecisionProviderFactory.get_default_provider()
+        assert isinstance(det_provider, DeterministicDecisionProvider)
+        assert det_provider.name == "deterministic"
+    finally:
+        settings.LLM_PROVIDER = original_provider
+
+
+# ============================================================
+# 22. AGENT LOOP USES DECISION PROVIDER NOT AGENT PLANNER
+# ============================================================
+
+def test_22_agent_loop_uses_decision_provider_not_agent_planner(db_session: Session, monkeypatch):
+    """Test 22: Verify AgentLoop delegates normal action selection to DecisionProvider.decide(),
+    and does NOT call AgentPlanner directly in the loop.
+    """
+    case = create_mock_case(db_session)
+    state = StateManager.initialize_state(db_session, case.id)
+
+    class TrackingDecisionProvider(DecisionProvider):
+        name = "tracking"
+        provider_type = "mock"
+        def __init__(self):
+            self.calls = 0
+
+        def decide(self, state, tools, db=None):
+            self.calls += 1
+            if self.calls == 1:
+                return AgentAction(
+                    tool_name="get_customer",
+                    parameters={"customer_id": str(case.customer_id)},
+                    rationale="Tracking provider decision",
+                    source="tracking",
+                )
+            return None
+
+    tracking_provider = TrackingDecisionProvider()
+
+    # If AgentPlanner.select_action was erroneously called by AgentLoop, this will fail
+    def forbid_planner_select_action(s):
+        raise AssertionError("AgentPlanner.select_action was directly called by AgentLoop! It must use DecisionProvider.")
+
+    from agents.planning.planner import AgentPlanner
+    monkeypatch.setattr(AgentPlanner, "select_action", forbid_planner_select_action)
+
+    result = AgentLoop.run(db=db_session, state=state, decision_provider=tracking_provider)
+    assert tracking_provider.calls >= 1
+    # Confirm trace records tracking source
+    assert any(step.get("source") == "tracking" for step in result.execution_trace)

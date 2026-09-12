@@ -4,7 +4,7 @@ Usage:
 1. Ensure your local .env file contains:
    GEMINI_API_KEY=your_actual_gemini_api_key
    LLM_PROVIDER=gemini
-   LLM_MODEL=gemini-1.5-flash
+   LLM_MODEL=gemini-3.7-flash
 2. Run from project root:
    python scripts/smoke_test_gemini.py
 """
@@ -45,7 +45,7 @@ def run_smoke_test():
         print("    2. Add to your local .env file:")
         print("       GEMINI_API_KEY=your_api_key_here")
         print("       LLM_PROVIDER=gemini")
-        print("       LLM_MODEL=gemini-1.5-flash")
+        print("       LLM_MODEL=gemini-3.7-flash")
         print("    3. Run: python scripts/smoke_test_gemini.py\n")
         return
 

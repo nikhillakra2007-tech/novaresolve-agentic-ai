@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 logger = logging.getLogger("nova.agents.planning.llm.client")
 
@@ -12,13 +12,13 @@ class LLMClientError(Exception):
 
 class GeminiClient:
     """Client for Google Gemini API handling authentication, request creation,
-    structured JSON retrieval, timeout, and error isolation.
+    function calling with structured JSON fallback, timeout, and error isolation.
     """
 
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model_name: str = "gemini-1.5-flash",
+        model_name: str = "gemini-3.7-flash",
         timeout_seconds: int = 15,
     ) -> None:
         self.api_key = api_key
@@ -42,9 +42,11 @@ class GeminiClient:
         self,
         system_instruction: str,
         user_prompt: str,
+        tool_declarations: Optional[List[Any]] = None,
     ) -> Dict[str, Any]:
-        """Sends the structured decision request to the Gemini model and returns parsed JSON.
-        Catches API errors and timeouts without leaking credentials.
+        """Sends the decision request to the Gemini model.
+        Prefers native function calling when tool declarations are provided,
+        with structured JSON output as a robust fallback.
         """
         if not self.is_available():
             raise LLMClientError("Gemini API key is not configured or client failed to initialize.")
@@ -52,10 +54,38 @@ class GeminiClient:
         try:
             from google.genai import types
 
+            # 1. Native Function-Calling Mode (Primary)
+            if tool_declarations:
+                try:
+                    config = types.GenerateContentConfig(
+                        system_instruction=system_instruction,
+                        tools=[types.Tool(function_declarations=tool_declarations)],
+                        temperature=0.1,
+                    )
+                    response = self._client.models.generate_content(
+                        model=self.model_name,
+                        contents=user_prompt,
+                        config=config,
+                    )
+
+                    # Extract function call if proposed by model
+                    if response and hasattr(response, "function_calls") and response.function_calls:
+                        call = response.function_calls[0]
+                        args = dict(call.args) if getattr(call, "args", None) else {}
+                        return {
+                            "action": call.name,
+                            "arguments": args,
+                            "reason": f"Function '{call.name}' proposed by Gemini model.",
+                            "expected_outcome": "Controlled capability execution.",
+                        }
+                except Exception as fn_err:
+                    logger.warning("Function calling attempt failed, falling back to structured JSON: %s", str(fn_err))
+
+            # 2. Structured JSON Mode (Fallback)
             config = types.GenerateContentConfig(
                 system_instruction=system_instruction,
                 response_mime_type="application/json",
-                temperature=0.1,  # Low temperature for deterministic/controlled decision making
+                temperature=0.1,
             )
 
             response = self._client.models.generate_content(
